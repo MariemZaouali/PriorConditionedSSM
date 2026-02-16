@@ -1,0 +1,22 @@
+# CGNet-CD Requirements
+# Python 3.8+ recommended (compatible with Python 3.8-3.11)
+
+# PyTorch and torchvision (updated to modern versions compatible with current PyPI)
+torch>=2.0.0
+torchvision>=0.15.0
+
+# Computer Vision
+opencv-python>=4.5.0
+
+# TensorBoard
+tensorboardx>=2.4
+
+# Additional common dependencies that may be needed
+numpy
+pillow
+matplotlib
+tqdm
+
+# Note: For GPU support, install PyTorch with CUDA using:
+# pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+# Or visit https://pytorch.org/get-started/locally/ for your specific CUDA version
