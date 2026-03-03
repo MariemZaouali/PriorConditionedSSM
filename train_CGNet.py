@@ -18,9 +18,11 @@ import random
 from utils.utils import clip_gradient, adjust_lr
 from utils.metrics import Evaluator
 
-from network.CGNet import HCGMNet, CGNet, CGNet_SSM
+from network.CGNet import HCGMNet, CGNet
 
 import time
+import sys
+
 start=time.time()
 
 def seed_everything(seed):
@@ -33,7 +35,7 @@ def seed_everything(seed):
     torch.backends.cudnn.benchmark = True
 
 
-def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, net, criterion, optimizer, num_epoches):
+def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, net, criterion, optimizer, num_epoches, device):
     vis = visual.Visualization()
     vis.create_summary(data_name)
     global best_iou
@@ -43,9 +45,9 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
     length = 0
     st = time.time()
     for i, (A, B, mask) in enumerate(tqdm(train_loader)):
-        A = A.cuda()
-        B = B.cuda()
-        Y = mask.cuda()
+        A = A.to(device)
+        B = B.to(device)
+        Y = mask.to(device)
         optimizer.zero_grad()
         preds = net(A,B)
         loss = criterion(preds[0], Y)  + criterion(preds[1], Y)
@@ -88,9 +90,9 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
     net.eval()
     for i, (A, B, mask, filename) in enumerate(tqdm(val_loader)):
         with torch.no_grad():
-            A = A.cuda()
-            B = B.cuda()
-            Y = mask.cuda()
+            A = A.to(device)
+            B = B.to(device)
+            Y = mask.to(device)
             preds = net(A,B)[1]
             output = F.sigmoid(preds)
             output[output >= 0.5] = 1
@@ -135,60 +137,85 @@ if __name__ == '__main__':
                         help='the test rgb images root')
     parser.add_argument('--model_name', type=str, default='CGNet',
                         help='the test rgb images root')
+    parser.add_argument('--model_type', type=str, default='CGNet',
+                        choices=['CGNet', 'CGNet_SSM'],
+                        help='Model type: CGNet (original) or CGNet_SSM (with RecursivePriorStateSpace)')
     parser.add_argument('--save_path', type=str,
                         default='./output/')
     opt = parser.parse_args()
 
     # set the device for training
-    if opt.gpu_id == '0':
-        os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-        print('USE GPU 0')
-    elif opt.gpu_id == '1':
-        os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-        print('USE GPU 1')
-    if opt.gpu_id == '2':
-        os.environ["CUDA_VISIBLE_DEVICES"] = "2"
-        print('USE GPU 2')
-    if opt.gpu_id == '3':
-        os.environ["CUDA_VISIBLE_DEVICES"] = "3"
-        print('USE GPU 3')
+    if torch.cuda.is_available():
+        if opt.gpu_id == '0':
+            os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+            device = torch.device('cuda:0')
+            print('✓ USE GPU 0')
+        elif opt.gpu_id == '1':
+            os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+            device = torch.device('cuda:1')
+            print('✓ USE GPU 1')
+        elif opt.gpu_id == '2':
+            os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+            device = torch.device('cuda:2')
+            print('✓ USE GPU 2')
+        elif opt.gpu_id == '3':
+            os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+            device = torch.device('cuda:3')
+            print('✓ USE GPU 3')
+        else:
+            device = torch.device('cuda')
+            print(f'✓ USE GPU (default, total {torch.cuda.device_count()} GPU(s) available)')
+    else:
+        device = torch.device('cpu')
+        print('⚠ No CUDA GPUs available - using CPU (training will be slow)')
 
     opt.save_path = opt.save_path + opt.data_name + '/' + opt.model_name
+    
+    # Configure dataset paths (use local relative paths)
+    dataset_base = './data'
     if opt.data_name == 'LEVIR':
-        opt.train_root = '/data/chengxi.han/data/LEVIR CD Dataset256/train/'
-        opt.val_root = '/data/chengxi.han/data/LEVIR CD Dataset256/val/'
+        opt.train_root = os.path.join(dataset_base, 'LEVIR-CD', 'train') + '/'
+        opt.val_root = os.path.join(dataset_base, 'LEVIR-CD', 'val') + '/'
     elif opt.data_name == 'WHU':
-        opt.train_root = '/data/chengxi.han/data/Building change detection dataset256/train/'
-        opt.val_root = '/data/chengxi.han/data/Building change detection dataset256/val/'
+        opt.train_root = os.path.join(dataset_base, 'WHU-CD', 'train') + '/'
+        opt.val_root = os.path.join(dataset_base, 'WHU-CD', 'val') + '/'
     elif opt.data_name == 'CDD':
-        opt.train_root = '/data/chengxi.han/data/CDD_ChangeDetectionDataset/Real/subset/train/'
-        opt.val_root = '/data/chengxi.han/data/CDD_ChangeDetectionDataset/Real/subset/val/'
+        opt.train_root = os.path.join(dataset_base, 'CDD', 'train') + '/'
+        opt.val_root = os.path.join(dataset_base, 'CDD', 'val') + '/'
     elif opt.data_name == 'DSIFN':
-        opt.train_root = '/data/chengxi.han/data/DSIFN256/train/'
-        opt.val_root = '/data/chengxi.han/data/DSIFN256/val/'
+        opt.train_root = os.path.join(dataset_base, 'DSIFN', 'train') + '/'
+        opt.val_root = os.path.join(dataset_base, 'DSIFN', 'val') + '/'
     elif opt.data_name == 'SYSU':
-        opt.train_root = '/data/chengxi.han/data/SYSU-CD/train/'
-        opt.val_root = '/data/chengxi.han/data/SYSU-CD/val/'
+        opt.train_root = os.path.join(dataset_base, 'SYSU-CD', 'train') + '/'
+        opt.val_root = os.path.join(dataset_base, 'SYSU-CD', 'val') + '/'
     elif opt.data_name == 'S2Looking':
-        opt.train_root = '/data/chengxi.han/data/S2Looking256/train/'
-        opt.val_root = '/data/chengxi.han/data/S2Looking256/val/'
+        opt.train_root = os.path.join(dataset_base, 'S2Looking', 'train') + '/'
+        opt.val_root = os.path.join(dataset_base, 'S2Looking', 'val') + '/'
 
-    train_loader = data_loader.get_loader(opt.train_root, opt.batchsize, opt.trainsize, num_workers=2, shuffle=True, pin_memory=True)
-    val_loader = data_loader.get_test_loader(opt.val_root, opt.batchsize, opt.trainsize, num_workers=2, shuffle=False, pin_memory=True)
+    train_loader = data_loader.get_loader(opt.train_root, opt.train_root, batch_size=opt.batchsize, shuffle=True, num_workers=2, pin_memory=True)
+    val_loader = data_loader.get_test_loader(opt.val_root, opt.val_root, batch_size=opt.batchsize, shuffle=False, num_workers=2, pin_memory=True)
     Eva_train = Evaluator(num_class = 2)
     Eva_val = Evaluator(num_class=2)
 
-    if opt.model_name == 'HCGMNet':
-        model = HCGMNet().cuda()
-    elif opt.model_name == 'CGNet':
-        model = CGNet().cuda()
-    elif opt.model_name == 'CGNet_SSM':
-        model = CGNet_SSM().cuda()
+    # Load model based on model_type
+    if opt.model_type == 'CGNet':
+        model = CGNet().to(device)
+        print(f"✓ Loaded CGNet (original)")
+    elif opt.model_type == 'CGNet_SSM':
+        from network.CGNet_SSM import CGNet_SSM
+        model = CGNet_SSM().to(device)
+        print(f"✓ Loaded CGNet_SSM (with RecursivePriorStateSpace)")
     else:
-        raise ValueError(f"Unknown model: {opt.model_name}. Choose from: HCGMNet, CGNet, CGNet_SSM")
+        raise ValueError(f"Unknown model_type: {opt.model_type}. Choose from: CGNet, CGNet_SSM")
+    
+    # Legacy support: allow model_name parameter (maps to model_type for backward compatibility)
+    if opt.model_name != 'CGNet' and opt.model_name != opt.model_type:
+        print(f"⚠ Warning: model_name is deprecated, use model_type instead")
+        if opt.model_name == 'CGNet_SSM':
+            opt.model_type = 'CGNet_SSM'
 
 
-    criterion = nn.BCEWithLogitsLoss().cuda()
+    criterion = nn.BCEWithLogitsLoss().to(device)
 
 
     # optimizer = torch.optim.Adam(model.parameters(), opt.lr)
@@ -214,7 +241,7 @@ if __name__ == '__main__':
         # cur_lr = adjust_lr(optimizer, opt.lr, epoch, opt.decay_rate, opt.decay_epoch)
         Eva_train.reset()
         Eva_val.reset()
-        train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, model, criterion, optimizer, opt.epoch)
+        train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, model, criterion, optimizer, opt.epoch, device)
         lr_scheduler.step()
         # print('现在的数据是：', args.data_name)
 

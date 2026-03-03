@@ -17,7 +17,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from network.prior_conditioned_ssm import PriorConditionedSSM, PriorConditionedSSMEfficient
-from network.CGNet import CGNet_SSM
+from network.CGNet_SSM import CGNet_SSM
 
 
 def test_prior_conditioned_ssm():
