@@ -66,6 +66,10 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
         pred = output.squeeze(1).data.cpu().numpy().astype(int)  # Remove channel dimension
         target = Y.squeeze(1).cpu().numpy().astype(int)  # Remove channel dimension
         
+        # Normalize labels from 0-255 to 0-1 range if needed
+        if target.max() > 1:
+            target = target // 255
+        
         Eva_train.add_batch(target, pred)
 
         length += 1
@@ -102,6 +106,10 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
             output[output < 0.5] = 0
             pred = output.squeeze(1).data.cpu().numpy().astype(int)  # Remove channel dimension
             target = Y.squeeze(1).cpu().numpy().astype(int)  # Remove channel dimension
+            
+            # Normalize labels from 0-255 to 0-1 range if needed
+            if target.max() > 1:
+                target = target // 255
             
             Eva_val.add_batch(target, pred)
 
