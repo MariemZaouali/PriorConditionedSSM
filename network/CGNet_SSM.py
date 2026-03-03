@@ -79,9 +79,6 @@ class RecursivePriorStateSpace(nn.Module):
         """
         batch_size, channels, height, width = x.shape
         
-        # Project input to hidden dimension
-        x_proj = self.input_proj(x)  # [B, hidden_dim, H, W]
-        
         # Normalize prior to [B, 1, H, W]
         if prior.shape[1] != 1:
             prior_normalized = prior.mean(dim=1, keepdim=True)
@@ -96,8 +93,13 @@ class RecursivePriorStateSpace(nn.Module):
         # Clamp prior to reasonable range
         prior_normalized = torch.clamp(prior_normalized, -1.0, 1.0)
         
-        # Additive injection of prior (NO sigmoid, NO multiplication)
-        F_mod = x_proj + self.alpha * prior_normalized
+        # Inject prior into original feature space (additive)
+        # Expand prior from [B, 1, H, W] to [B, C, H, W] by repeating
+        prior_expanded = prior_normalized.expand(batch_size, channels, height, width)
+        F_mod = x + self.alpha * prior_expanded
+        
+        # Project to hidden dimension for recursive computation
+        x_proj = self.input_proj(F_mod)  # [B, hidden_dim, H, W]
         
         # Constrain A with tanh for stability
         A = torch.tanh(self.A)  # [hidden_dim]
@@ -128,9 +130,9 @@ class RecursivePriorStateSpace(nn.Module):
         h_fused = h_horizontal + h_vertical
         
         # Output projection
-        out = self.output_proj(h_fused)  # [B, C, H, W]
+        out = self.output_proj(h_fused)  # [B, in_dim, H, W]
         
-        # Final residual connection
+        # Final residual connection in original feature space
         F_out = F_mod + self.gamma * out
         
         return F_out
