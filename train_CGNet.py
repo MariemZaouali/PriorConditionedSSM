@@ -47,7 +47,7 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
     for i, (A, B, mask) in enumerate(tqdm(train_loader)):
         A = A.to(device)
         B = B.to(device)
-        Y = mask.to(device)
+        Y = mask.to(device).unsqueeze(1)  # Add channel dimension: [B, H, W] -> [B, 1, H, W]
         optimizer.zero_grad()
         preds = net(A,B)
         loss = criterion(preds[0], Y)  + criterion(preds[1], Y)
@@ -60,8 +60,8 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
         output = F.sigmoid(preds[1])
         output[output >= 0.5] = 1
         output[output < 0.5] = 0
-        pred = output.data.cpu().numpy().astype(int)
-        target = Y.cpu().numpy().astype(int)
+        pred = output.squeeze(1).data.cpu().numpy().astype(int)  # Remove channel dimension
+        target = Y.squeeze(1).cpu().numpy().astype(int)  # Remove channel dimension
         
         Eva_train.add_batch(target, pred)
 
@@ -92,14 +92,14 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
         with torch.no_grad():
             A = A.to(device)
             B = B.to(device)
-            Y = mask.to(device)
+            Y = mask.to(device).unsqueeze(1)  # Add channel dimension for consistency
             preds = net(A,B)[1]
             output = F.sigmoid(preds)
             output[output >= 0.5] = 1
             output[output < 0.5] = 0
-            pred = output.data.cpu().numpy().astype(int)
-            target = Y.cpu().numpy().astype(int)
-
+            pred = output.squeeze(1).data.cpu().numpy().astype(int)  # Remove channel dimension
+            target = Y.squeeze(1).cpu().numpy().astype(int)  # Remove channel dimension
+            
             Eva_val.add_batch(target, pred)
 
             length += 1
