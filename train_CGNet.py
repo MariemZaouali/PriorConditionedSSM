@@ -146,25 +146,18 @@ if __name__ == '__main__':
 
     # set the device for training
     if torch.cuda.is_available():
-        if opt.gpu_id == '0':
-            os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-            device = torch.device('cuda:0')
-            print('✓ USE GPU 0')
-        elif opt.gpu_id == '1':
-            os.environ["CUDA_VISIBLE_DEVICES"] = "1"
-            device = torch.device('cuda:1')
-            print('✓ USE GPU 1')
-        elif opt.gpu_id == '2':
-            os.environ["CUDA_VISIBLE_DEVICES"] = "2"
-            device = torch.device('cuda:2')
-            print('✓ USE GPU 2')
-        elif opt.gpu_id == '3':
-            os.environ["CUDA_VISIBLE_DEVICES"] = "3"
-            device = torch.device('cuda:3')
-            print('✓ USE GPU 3')
-        else:
-            device = torch.device('cuda')
-            print(f'✓ USE GPU (default, total {torch.cuda.device_count()} GPU(s) available)')
+        num_gpus = torch.cuda.device_count()
+        gpu_id = int(opt.gpu_id) if opt.gpu_id.isdigit() else 0
+        
+        # Check if requested GPU exists, otherwise use first available
+        if gpu_id >= num_gpus:
+            print(f'⚠ GPU {gpu_id} not available (only {num_gpus} GPU(s) detected)')
+            gpu_id = 0
+            print(f'✓ Falling back to GPU 0')
+        
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
+        device = torch.device('cuda:0')  # After setting CUDA_VISIBLE_DEVICES, use cuda:0
+        print(f'✓ USE GPU {gpu_id} (total {num_gpus} GPU(s) available)')
     else:
         device = torch.device('cpu')
         print('⚠ No CUDA GPUs available - using CPU (training will be slow)')

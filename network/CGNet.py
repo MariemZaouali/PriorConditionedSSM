@@ -67,7 +67,7 @@ class ChangeGuideModule(nn.Module):
 class HCGMNet(nn.Module):
     def __init__(self,):
         super(HCGMNet, self).__init__()
-        vgg16_bn = models.vgg16_bn(pretrained=True)
+        vgg16_bn = models.vgg16_bn(weights=models.VGG16_BN_Weights.DEFAULT)
         self.inc = vgg16_bn.features[:5]  # 64
         self.down1 = vgg16_bn.features[5:12]  # 128
         self.down2 = vgg16_bn.features[12:22]  # 256
@@ -152,7 +152,7 @@ class HCGMNet(nn.Module):
 class CGNet(nn.Module):
     def __init__(self,):
         super(CGNet, self).__init__()
-        vgg16_bn = models.vgg16_bn(pretrained=True)
+        vgg16_bn = models.vgg16_bn(weights=models.VGG16_BN_Weights.DEFAULT)
         self.inc = vgg16_bn.features[:5]  # 64
         self.down1 = vgg16_bn.features[5:12]  # 128
         self.down2 = vgg16_bn.features[12:22]  # 256
@@ -258,7 +258,7 @@ class CGNet(nn.Module):
 class CGNet_Ablation(nn.Module):
     def __init__(self,):
         super(CGNet_Ablation, self).__init__()
-        vgg16_bn = models.vgg16_bn(pretrained=True)
+        vgg16_bn = models.vgg16_bn(weights=models.VGG16_BN_Weights.DEFAULT)
         self.inc = vgg16_bn.features[:5]  # 64
         self.down1 = vgg16_bn.features[5:12]  # 128
         self.down2 = vgg16_bn.features[12:22]  # 256

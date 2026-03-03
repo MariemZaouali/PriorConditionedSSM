@@ -148,7 +148,7 @@ class CGNet_SSM(nn.Module):
         super(CGNet_SSM, self).__init__()
         
         # Load VGG16-BN backbone
-        vgg16_bn = models.vgg16_bn(pretrained=True)
+        vgg16_bn = models.vgg16_bn(weights=models.VGG16_BN_Weights.DEFAULT)
         
         # Encoder: Feature extraction
         self.inc = vgg16_bn.features[:5]      # 64 channels
