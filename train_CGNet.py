@@ -50,7 +50,10 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
         Y = mask.to(device).unsqueeze(1).float()  # Add channel dimension and cast to float
         optimizer.zero_grad()
         preds = net(A,B)
-        loss = criterion(preds[0], Y)  + criterion(preds[1], Y)
+        # Ensure predictions are float32 for loss computation
+        pred0 = preds[0].float()
+        pred1 = preds[1].float()
+        loss = criterion(pred0, Y) + criterion(pred1, Y)
         # ---- loss function ----
         loss.backward()
         optimizer.step()
