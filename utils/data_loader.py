@@ -249,9 +249,20 @@ class ChangeDataset(data.Dataset):
             img_B[y1a:y2a, x1a:x2a] = img_B_list[i][y1b:y2b, x1b:x2b, :]
             label[y1a:y2a, x1a:x2a] = label_list[i][y1b:y2b, x1b:x2b]
 
-        img_A = randomCrop_Mosaic(img_A, img_B, label, (256, 256))[0]
-        img_B = randomCrop_Mosaic(img_A, img_B, label, (256, 256))[1]
-        label = randomCrop_Mosaic(img_A, img_B, label, (256, 256))[2]
+        # Call randomCrop_Mosaic once and unpack all three outputs
+        img_A, img_B, label = randomCrop_Mosaic(img_A, img_B, label, (256, 256))
+        
+        # Ensure all outputs are exactly 256x256
+        # Convert to PIL Image for resizing if needed
+        if img_A.shape[:2] != (256, 256):
+            img_A = Image.fromarray(img_A).resize((256, 256), Image.BILINEAR)
+            img_A = np.array(img_A)
+        if img_B.shape[:2] != (256, 256):
+            img_B = Image.fromarray(img_B).resize((256, 256), Image.BILINEAR)
+            img_B = np.array(img_B)
+        if label.shape[:2] != (256, 256):
+            label = Image.fromarray(label).resize((256, 256), Image.NEAREST)
+            label = np.array(label)
 
         return img_A, img_B, label
 
