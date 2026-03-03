@@ -104,9 +104,9 @@ class RecursivePriorStateSpace(nn.Module):
         B = self.B  # [hidden_dim]
         
         # Reshape for recursive computation
-        # [B, hidden_dim, H, W]
-        A_expanded = A.view(1, -1, 1, 1)  # [1, hidden_dim, 1, 1]
-        B_expanded = B.view(1, -1, 1, 1)  # [1, hidden_dim, 1, 1]
+        # For broadcasting with sliced tensors [B, hidden_dim, H] or [B, hidden_dim, W]
+        A_expanded = A.view(1, -1)  # [1, hidden_dim]
+        B_expanded = B.view(1, -1)  # [1, hidden_dim]
         
         # Horizontal recursive dynamics along width dimension
         h_horizontal = torch.zeros_like(x_proj)
