@@ -47,7 +47,7 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
     for i, (A, B, mask) in enumerate(tqdm(train_loader)):
         A = A.to(device)
         B = B.to(device)
-        Y = mask.to(device).unsqueeze(1)  # Add channel dimension: [B, H, W] -> [B, 1, H, W]
+        Y = mask.to(device).unsqueeze(1).float()  # Add channel dimension and cast to float
         optimizer.zero_grad()
         preds = net(A,B)
         loss = criterion(preds[0], Y)  + criterion(preds[1], Y)
@@ -92,7 +92,7 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
         with torch.no_grad():
             A = A.to(device)
             B = B.to(device)
-            Y = mask.to(device).unsqueeze(1)  # Add channel dimension for consistency
+            Y = mask.to(device).unsqueeze(1).float()  # Add channel dimension and cast to float
             preds = net(A,B)[1]
             output = F.sigmoid(preds)
             output[output >= 0.5] = 1
