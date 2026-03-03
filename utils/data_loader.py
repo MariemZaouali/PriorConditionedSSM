@@ -196,9 +196,9 @@ class ChangeDataset(data.Dataset):
 
         for index, f_name in enumerate(file_name_list):
 
-            img_A = Image.open(os.path.join(self.img_A_path_list, f_name + '.jpg'))
-            img_B = Image.open(os.path.join(self.img_B_path_list, f_name + '.jpg'))
-            label = Image.open(os.path.join(self.gt_path_list, f_name + '.png'))
+            img_A = Image.open(os.path.join(self.img_A_path_list, f_name + '.tif'))
+            img_B = Image.open(os.path.join(self.img_B_path_list, f_name + '.tif'))
+            label = Image.open(os.path.join(self.gt_path_list, f_name + '.tif'))
 
             img_A, img_B, label = cv_random_flip(img_A, img_B, label)
 
@@ -278,9 +278,9 @@ class Test_ChangeDataset(data.Dataset):
 
         file_name = self.file_name_list[index]
 
-        img_A = Image.open(os.path.join(self.img_A_path_list, file_name + '.jpg'))
-        img_B = Image.open(os.path.join(self.img_B_path_list, file_name + '.jpg'))
-        label = Image.open(os.path.join(self.gt_path_list, file_name + '.png'))
+        img_A = Image.open(os.path.join(self.img_A_path_list, file_name + '.tif'))
+        img_B = Image.open(os.path.join(self.img_B_path_list, file_name + '.tif'))
+        label = Image.open(os.path.join(self.gt_path_list, file_name + '.tif'))
 
         img_A = np.array(img_A)
         img_B = np.array(img_B)
