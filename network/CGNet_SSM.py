@@ -183,6 +183,7 @@ class CGNet_SSM(nn.Module):
         )
         
         # Recursive Prior State Space modules for prior-conditioned processing
+        self.rpss_1 = RecursivePriorStateSpace(in_channels=128, hidden_dim=64)
         self.rpss_2 = RecursivePriorStateSpace(in_channels=256, hidden_dim=128)
         self.rpss_3 = RecursivePriorStateSpace(in_channels=512, hidden_dim=256)
         self.rpss_4 = RecursivePriorStateSpace(in_channels=512, hidden_dim=256)
@@ -259,7 +260,7 @@ class CGNet_SSM(nn.Module):
         # Upsample prior and apply RPSS at layer1
         change_map_up = F.interpolate(change_map_coarse, size=layer1.size()[2:],
                                       mode='bilinear', align_corners=True)
-        layer1_enhanced = self.rpss_2(layer1, change_map_up)
+        layer1_enhanced = self.rpss_1(layer1, change_map_up)
         
         # Final decoder
         layer1_final = self.decoder_module2(torch.cat([self.upsample2x(feature3), layer1_enhanced], 1))
