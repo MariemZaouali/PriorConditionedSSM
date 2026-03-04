@@ -76,7 +76,7 @@ def download_levir_cd(target_dir: str = 'data/LEVIR-CD'):
     """
     target_dir = Path(target_dir)
     if target_dir.exists():
-        print(f"  ✓ Dataset already exists at {target_dir}")
+        print(f"  Dataset already exists at {target_dir}")
         return
 
     url = 'https://justchenhao.github.io/LEVIR/LEVIR-CD.zip'
