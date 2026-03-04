@@ -116,7 +116,7 @@ class RecursivePriorStateSpace(nn.Module):
             if i == 0:
                 h_horizontal[:, :, :, i] = B_expanded * x_proj[:, :, :, i]
             else:
-                h_horizontal[:, :, :, i] = A_expanded * h_horizontal[:, :, :, i-1] + B_expanded * x_proj[:, :, :, i]
+                h_horizontal[:, :, :, i] = A_expanded * h_horizontal[:, :, :, i-1].detach() + B_expanded * x_proj[:, :, :, i]
         
         # Vertical recursive dynamics along height dimension
         h_vertical = torch.zeros_like(x_proj)
@@ -124,7 +124,7 @@ class RecursivePriorStateSpace(nn.Module):
             if j == 0:
                 h_vertical[:, :, j, :] = B_expanded * x_proj[:, :, j, :]
             else:
-                h_vertical[:, :, j, :] = A_expanded * h_vertical[:, :, j-1, :] + B_expanded * x_proj[:, :, j, :]
+                h_vertical[:, :, j, :] = A_expanded * h_vertical[:, :, j-1, :].detach() + B_expanded * x_proj[:, :, j, :]
         
         # Fusion of horizontal and vertical paths
         h_fused = h_horizontal + h_vertical
@@ -150,7 +150,11 @@ class CGNet_SSM(nn.Module):
         super(CGNet_SSM, self).__init__()
         
         # Load VGG16-BN backbone
-        vgg16_bn = models.vgg16_bn(weights=models.VGG16_BN_Weights.DEFAULT)
+        try:
+            vgg16_bn = models.vgg16_bn(weights=models.VGG16_BN_Weights.DEFAULT)
+        except AttributeError:
+            # Fallback for older torchvision versions
+            vgg16_bn = models.vgg16_bn(pretrained=True)
         
         # Encoder: Feature extraction
         self.inc = vgg16_bn.features[:5]      # 64 channels
