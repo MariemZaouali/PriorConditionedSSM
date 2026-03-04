@@ -111,20 +111,32 @@ class RecursivePriorStateSpace(nn.Module):
         B_expanded = B.view(1, -1, 1)  # [1, hidden_dim, 1]
         
         # Horizontal recursive dynamics along width dimension
-        h_horizontal = torch.zeros_like(x_proj)
+        # NOTE: avoid in-place slice assignment to keep autograd graph stable.
+        h_horizontal_steps = []
+        prev_h = None
         for i in range(width):
+            x_i = x_proj[:, :, :, i]
             if i == 0:
-                h_horizontal[:, :, :, i] = B_expanded * x_proj[:, :, :, i]
+                h_i = B_expanded * x_i
             else:
-                h_horizontal[:, :, :, i] = A_expanded * h_horizontal[:, :, :, i-1].detach() + B_expanded * x_proj[:, :, :, i]
+                h_i = A_expanded * prev_h.detach() + B_expanded * x_i
+            h_horizontal_steps.append(h_i)
+            prev_h = h_i
+        h_horizontal = torch.stack(h_horizontal_steps, dim=-1)
         
         # Vertical recursive dynamics along height dimension
-        h_vertical = torch.zeros_like(x_proj)
+        # NOTE: avoid in-place slice assignment to keep autograd graph stable.
+        h_vertical_steps = []
+        prev_h = None
         for j in range(height):
+            x_j = x_proj[:, :, j, :]
             if j == 0:
-                h_vertical[:, :, j, :] = B_expanded * x_proj[:, :, j, :]
+                h_j = B_expanded * x_j
             else:
-                h_vertical[:, :, j, :] = A_expanded * h_vertical[:, :, j-1, :].detach() + B_expanded * x_proj[:, :, j, :]
+                h_j = A_expanded * prev_h.detach() + B_expanded * x_j
+            h_vertical_steps.append(h_j)
+            prev_h = h_j
+        h_vertical = torch.stack(h_vertical_steps, dim=2)
         
         # Fusion of horizontal and vertical paths
         h_fused = h_horizontal + h_vertical
