@@ -136,8 +136,20 @@ class ChangeDataset(data.Dataset):
         self.img_B_path_list = os.path.join(img_root_path, 'B')
         self.gt_path_list = os.path.join(gt_root_path, 'label')
 
+        # Check if directories exist and have files
+        if not os.path.exists(self.gt_path_list):
+            raise ValueError(f"Label directory not found: {self.gt_path_list}")
+        if not os.path.exists(self.img_A_path_list):
+            raise ValueError(f"Image A directory not found: {self.img_A_path_list}")
+        if not os.path.exists(self.img_B_path_list):
+            raise ValueError(f"Image B directory not found: {self.img_B_path_list}")
+
         file_name_list = os.listdir(self.gt_path_list)
+        if len(file_name_list) == 0:
+            raise ValueError(f"No files found in label directory: {self.gt_path_list}")
+        
         self.file_name_list = [x.split('.')[0] for x in file_name_list]
+        print(f"Found {len(self.file_name_list)} training samples")
 
     def __len__(self):
         return len(self.file_name_list)

@@ -162,16 +162,16 @@ if __name__ == '__main__':
         
         # Check if requested GPU exists, otherwise use first available
         if gpu_id >= num_gpus:
-            print(f'⚠ GPU {gpu_id} not available (only {num_gpus} GPU(s) detected)')
+            print(f'Warning: GPU {gpu_id} not available (only {num_gpus} GPU(s) detected)')
             gpu_id = 0
-            print(f'✓ Falling back to GPU 0')
+            print(f'Falling back to GPU 0')
         
         os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)
         device = torch.device('cuda:0')  # After setting CUDA_VISIBLE_DEVICES, use cuda:0
-        print(f'✓ USE GPU {gpu_id} (total {num_gpus} GPU(s) available)')
+        print(f'Using GPU {gpu_id} (total {num_gpus} GPU(s) available)')
     else:
         device = torch.device('cpu')
-        print('⚠ No CUDA GPUs available - using CPU (training will be slow)')
+        print('Warning: No CUDA GPUs available - using CPU (training will be slow)')
 
     opt.save_path = opt.save_path + opt.data_name + '/' + opt.model_name
     
