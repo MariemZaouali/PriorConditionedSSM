@@ -31,6 +31,9 @@ import argparse
 import time
 from pathlib import Path
 from tqdm import tqdm
+import requests
+import zipfile
+import shutil
 
 import numpy as np
 import torch
@@ -61,6 +64,48 @@ ERROR_LABELS = ['TN (Correct No-Change)',
                 'FP (False Alarm)',
                 'FN (Missed Change)',
                 'TP (Correct Change)']
+
+
+# ===========================================================================
+#  Dataset download
+# ===========================================================================
+
+def download_levir_cd(target_dir: str = 'data/LEVIR-CD'):
+    """
+    Download and extract LEVIR-CD dataset if not already present.
+    """
+    target_dir = Path(target_dir)
+    if target_dir.exists():
+        print(f"  ✓ Dataset already exists at {target_dir}")
+        return
+
+    url = 'https://justchenhao.github.io/LEVIR/LEVIR-CD.zip'
+    zip_path = target_dir.parent / 'LEVIR-CD.zip'
+
+    print(f"  Downloading LEVIR-CD dataset from {url} ...")
+    try:
+        response = requests.get(url, stream=True)
+        response.raise_for_status()
+        total_size = int(response.headers.get('content-length', 0))
+        with open(zip_path, 'wb') as f, tqdm(
+            desc='Downloading', total=total_size, unit='B', unit_scale=True
+        ) as pbar:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+                pbar.update(len(chunk))
+        print(f"  ✓ Downloaded to {zip_path}")
+
+        print("  Extracting ...")
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            zf.extractall(target_dir.parent)
+        print(f"  ✓ Extracted to {target_dir.parent}")
+
+        # Clean up zip
+        zip_path.unlink(missing_ok=True)
+        print("  ✓ Cleaned up zip file")
+    except Exception as e:
+        print(f"  ⚠ Download failed: {e}")
+        print("  Proceeding without dataset download.")
 
 
 # ===========================================================================
@@ -474,6 +519,9 @@ def run_single(args):
 
 def run_dataset(args):
     print('\n=== DATASET MODE ===')
+    # Ensure dataset is present
+    download_levir_cd(target_dir=str(Path(args.data_dir).parent))
+    
     data_dir = Path(args.data_dir)
     out_dir  = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
