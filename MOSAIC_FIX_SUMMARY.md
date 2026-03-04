@@ -2,13 +2,19 @@
 
 ## Problem Description
 
-The training process was failing with a `ValueError` during mosaic data augmentation:
+The training process was failing with `ValueError` exceptions during mosaic data augmentation:
 
+### Initial Error
 ```
 ValueError: could not broadcast input array from shape (172,54,3) into shape (214,155,3)
 ```
 
-This error occurred in the `load_mosaic_img_and_mask` method of the `ChangeDataset` class in `utils/data_loader.py`.
+### Secondary Error (after initial fix)
+```
+ValueError: height and width must be > 0
+```
+
+These errors occurred in the `load_mosaic_img_and_mask` method of the `ChangeDataset` class in `utils/data_loader.py`.
 
 ## Root Cause Analysis
 
