@@ -234,9 +234,14 @@ class ChangeDataset(data.Dataset):
                 x1a, y1a, x2a, y2a = xc, yc, min(xc + s, s * 2), min(s * 2, yc + s)
                 x1b, y1b, x2b, y2b = 0, 0, min(s, x2a - x1a), min(s, y2a - y1a)
 
-            img_A_list.append(img_A[y1b:y2b, x1b:x2b, :])
-            img_B_list.append(img_B[y1b:y2b, x1b:x2b, :])
-            label_list.append(label[y1b:y2b, x1b:x2b])
+            # Extract patches with proper bounds checking
+            patch_A = img_A[y1b:y2b, x1b:x2b, :]
+            patch_B = img_B[y1b:y2b, x1b:x2b, :]
+            patch_label = label[y1b:y2b, x1b:x2b]
+            
+            img_A_list.append(patch_A)
+            img_B_list.append(patch_B)
+            label_list.append(patch_label)
 
         img_A = np.full((s * 2, s * 2, 3), 114, dtype=np.uint8)  # base image with 4 tiles
         img_B = np.full((s * 2, s * 2, 3), 114, dtype=np.uint8)
@@ -257,9 +262,29 @@ class ChangeDataset(data.Dataset):
                 x1a, y1a, x2a, y2a = xc, yc, min(xc + s, s * 2), min(s * 2, yc + s)
                 x1b, y1b, x2b, y2b = 0, 0, min(s, x2a - x1a), min(s, y2a - y1a)
 
-            img_A[y1a:y2a, x1a:x2a] = img_A_list[i][y1b:y2b, x1b:x2b, :]
-            img_B[y1a:y2a, x1a:x2a] = img_B_list[i][y1b:y2b, x1b:x2b, :]
-            label[y1a:y2a, x1a:x2a] = label_list[i][y1b:y2b, x1b:x2b]
+            # Get the patch and its actual size
+            patch_A = img_A_list[i]
+            patch_B = img_B_list[i]
+            patch_label = label_list[i]
+            
+            # Calculate the actual patch size
+            patch_h, patch_w = patch_A.shape[:2]
+            
+            # Calculate the target region size
+            target_h = y2a - y1a
+            target_w = x2a - x1a
+            
+            # If patch size doesn't match target size, resize the patch
+            if patch_h != target_h or patch_w != target_w:
+                # Resize patch to match target region size
+                patch_A = np.array(Image.fromarray(patch_A).resize((target_w, target_h), Image.BILINEAR))
+                patch_B = np.array(Image.fromarray(patch_B).resize((target_w, target_h), Image.BILINEAR))
+                patch_label = np.array(Image.fromarray(patch_label).resize((target_w, target_h), Image.NEAREST))
+
+            # Now assign the resized patch to the target region
+            img_A[y1a:y2a, x1a:x2a] = patch_A
+            img_B[y1a:y2a, x1a:x2a] = patch_B
+            label[y1a:y2a, x1a:x2a] = patch_label
 
         # Call randomCrop_Mosaic once and unpack all three outputs
         img_A, img_B, label = randomCrop_Mosaic(img_A, img_B, label, (256, 256))
