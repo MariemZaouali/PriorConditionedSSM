@@ -231,7 +231,7 @@ if __name__ == '__main__':
     elif opt.model_type == 'CGNet_SSM':
         from network.CGNet_SSM import CGNet_SSM
         model = CGNet_SSM().to(device)
-        print(f"✓ Loaded CGNet_SSM (with RecursivePriorStateSpace)")
+        print(f"Loaded CGNet_SSM (with RecursivePriorStateSpace)")
     else:
         raise ValueError(f"Unknown model_type: {opt.model_type}. Choose from: CGNet, CGNet_SSM")
     
