@@ -177,24 +177,47 @@ if __name__ == '__main__':
     
     # Configure dataset paths (use local relative paths)
     dataset_base = './data'
+    
+    # Check if dataset exists and download if needed
+    def check_and_download_dataset(data_name):
+        dataset_path = os.path.join(dataset_base, f'{data_name}-CD')
+        if not os.path.exists(dataset_path):
+            print(f"Dataset {data_name}-CD not found at {dataset_path}")
+            print(f"Please download the {data_name}-CD dataset and extract it to {dataset_path}")
+            print("You can download it from the official source or use the download_dataset.py script")
+            return False
+        return True
+    
     if opt.data_name == 'LEVIR':
         opt.train_root = os.path.join(dataset_base, 'LEVIR-CD', 'train') + '/'
         opt.val_root = os.path.join(dataset_base, 'LEVIR-CD', 'val') + '/'
+        if not check_and_download_dataset('LEVIR'):
+            sys.exit(1)
     elif opt.data_name == 'WHU':
         opt.train_root = os.path.join(dataset_base, 'WHU-CD', 'train') + '/'
         opt.val_root = os.path.join(dataset_base, 'WHU-CD', 'val') + '/'
+        if not check_and_download_dataset('WHU'):
+            sys.exit(1)
     elif opt.data_name == 'CDD':
         opt.train_root = os.path.join(dataset_base, 'CDD', 'train') + '/'
         opt.val_root = os.path.join(dataset_base, 'CDD', 'val') + '/'
+        if not check_and_download_dataset('CDD'):
+            sys.exit(1)
     elif opt.data_name == 'DSIFN':
         opt.train_root = os.path.join(dataset_base, 'DSIFN', 'train') + '/'
         opt.val_root = os.path.join(dataset_base, 'DSIFN', 'val') + '/'
+        if not check_and_download_dataset('DSIFN'):
+            sys.exit(1)
     elif opt.data_name == 'SYSU':
         opt.train_root = os.path.join(dataset_base, 'SYSU-CD', 'train') + '/'
         opt.val_root = os.path.join(dataset_base, 'SYSU-CD', 'val') + '/'
+        if not check_and_download_dataset('SYSU'):
+            sys.exit(1)
     elif opt.data_name == 'S2Looking':
         opt.train_root = os.path.join(dataset_base, 'S2Looking', 'train') + '/'
         opt.val_root = os.path.join(dataset_base, 'S2Looking', 'val') + '/'
+        if not check_and_download_dataset('S2Looking'):
+            sys.exit(1)
 
     train_loader = data_loader.get_loader(opt.train_root, opt.train_root, batch_size=opt.batchsize, shuffle=True, num_workers=2, pin_memory=True)
     val_loader = data_loader.get_test_loader(opt.val_root, opt.val_root, batch_size=opt.batchsize, shuffle=False, num_workers=2, pin_memory=True)
