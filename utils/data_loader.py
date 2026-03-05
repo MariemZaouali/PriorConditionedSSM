@@ -278,19 +278,18 @@ class ChangeDataset(data.Dataset):
             if target_h <= 0 or target_w <= 0:
                 continue
                 
-            # If patch size doesn't match target size, resize the patch
-            if patch_h != target_h or patch_w != target_w:
-                # Ensure patch has valid size before resizing
-                if patch_h > 0 and patch_w > 0:
-                    # Resize patch to match target region size
-                    patch_A = np.array(Image.fromarray(patch_A).resize((target_w, target_h), Image.BILINEAR))
-                    patch_B = np.array(Image.fromarray(patch_B).resize((target_w, target_h), Image.BILINEAR))
-                    patch_label = np.array(Image.fromarray(patch_label).resize((target_w, target_h), Image.NEAREST))
-                else:
-                    # If patch has zero size, create a filled patch
-                    patch_A = np.full((target_h, target_w, 3), 114, dtype=np.uint8)
-                    patch_B = np.full((target_h, target_w, 3), 114, dtype=np.uint8)
-                    patch_label = np.full((target_h, target_w), 0, dtype=np.uint8)
+            # Always resize patch to match target region size (regardless of whether they match)
+            # This ensures consistent dimensions for assignment
+            if patch_h > 0 and patch_w > 0:
+                # Resize patch to match target region size
+                patch_A = np.array(Image.fromarray(patch_A).resize((target_w, target_h), Image.BILINEAR))
+                patch_B = np.array(Image.fromarray(patch_B).resize((target_w, target_h), Image.BILINEAR))
+                patch_label = np.array(Image.fromarray(patch_label).resize((target_w, target_h), Image.NEAREST))
+            else:
+                # If patch has zero size, create a filled patch
+                patch_A = np.full((target_h, target_w, 3), 114, dtype=np.uint8)
+                patch_B = np.full((target_h, target_w, 3), 114, dtype=np.uint8)
+                patch_label = np.full((target_h, target_w), 0, dtype=np.uint8)
 
             # Now assign the resized patch to the target region
             img_A[y1a:y2a, x1a:x2a] = patch_A
