@@ -176,9 +176,9 @@ class ChangeDataset(data.Dataset):
         return img_A_ts, img_B_ts, label_ts
 
     def load_img_and_mask(self, file_name):
-        img_A = Image.open(os.path.join(self.img_A_path_list, file_name + '.tif'))
-        img_B = Image.open(os.path.join(self.img_B_path_list, file_name + '.tif'))
-        label = Image.open(os.path.join(self.gt_path_list, file_name + '.tif'))
+        img_A = Image.open(os.path.join(self.img_A_path_list, file_name + '.png'))
+        img_B = Image.open(os.path.join(self.img_B_path_list, file_name + '.png'))
+        label = Image.open(os.path.join(self.gt_path_list, file_name + '.png'))
 
         img_A, img_B, label = cv_random_flip(img_A, img_B, label)
         img_A, img_B, label = randomCrop(np.array(img_A), np.array(img_B), np.array(label))
@@ -208,9 +208,9 @@ class ChangeDataset(data.Dataset):
 
         for index, f_name in enumerate(file_name_list):
 
-            img_A = Image.open(os.path.join(self.img_A_path_list, f_name + '.tif'))
-            img_B = Image.open(os.path.join(self.img_B_path_list, f_name + '.tif'))
-            label = Image.open(os.path.join(self.gt_path_list, f_name + '.tif'))
+            img_A = Image.open(os.path.join(self.img_A_path_list, f_name + '.png'))
+            img_B = Image.open(os.path.join(self.img_B_path_list, f_name + '.png'))
+            label = Image.open(os.path.join(self.gt_path_list, f_name + '.png'))
 
             img_A, img_B, label = cv_random_flip(img_A, img_B, label)
 
