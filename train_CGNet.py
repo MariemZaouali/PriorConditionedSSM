@@ -219,8 +219,8 @@ if __name__ == '__main__':
         if not check_and_download_dataset('S2Looking'):
             sys.exit(1)
 
-    train_loader = data_loader.get_loader(opt.train_root, opt.train_root, batch_size=opt.batchsize, shuffle=True, num_workers=2, pin_memory=True)
-    val_loader = data_loader.get_test_loader(opt.val_root, opt.val_root, batch_size=opt.batchsize, shuffle=False, num_workers=2, pin_memory=True)
+    train_loader = data_loader.get_loader(opt.train_root, opt.batchsize, opt.trainsize, num_workers=2, shuffle=True, pin_memory=True)
+    val_loader = data_loader.get_test_loader(opt.val_root, opt.batchsize, opt.trainsize, num_workers=2, shuffle=False, pin_memory=True)
     Eva_train = Evaluator(num_class = 2)
     Eva_val = Evaluator(num_class=2)
 
