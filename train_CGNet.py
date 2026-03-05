@@ -50,10 +50,10 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
         Y = mask.to(device).unsqueeze(1).float()  # Add channel dimension and cast to float
         optimizer.zero_grad()
         preds = net(A,B)
-        # Ensure predictions are float32 for loss computation
-        pred0 = preds[0].float()
-        pred1 = preds[1].float()
-        loss = criterion(pred0, Y) + criterion(pred1, Y)
+        # For CGNet_SSM, use only the final_map (preds[1]) for loss computation
+        # preds[0] is coarse map, preds[1] is final refined map
+        final_pred = preds[1].float()
+        loss = criterion(final_pred, Y)
         # ---- loss function ----
         loss.backward()
         optimizer.step()
