@@ -8,7 +8,7 @@ import torch
 import torch.nn.functional as F
 import torch.nn as nn
 import numpy as np
-from utils import data_loader
+from utils import data_loader_original as data_loader
 from tqdm import tqdm
 from utils.metrics import Evaluator
 # from network.Net import HANet_v2

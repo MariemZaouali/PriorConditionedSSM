@@ -11,7 +11,7 @@ import torch.nn as nn
 import numpy as np
 from torch import optim
 import utils.visualization as visual
-from utils import data_loader
+from utils import data_loader_original as data_loader
 from torch.optim import lr_scheduler
 from tqdm import tqdm
 import random
