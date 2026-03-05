@@ -47,7 +47,7 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
     for i, (A, B, mask) in enumerate(tqdm(train_loader)):
         A = A.to(device)
         B = B.to(device)
-        Y = mask.to(device).unsqueeze(1).float()  # Add channel dimension and cast to float
+        Y = mask.to(device).float()  # The original data loader already returns proper shape
         optimizer.zero_grad()
         preds = net(A,B)
         # For CGNet_SSM, use only the final_map (preds[1]) for loss computation
@@ -99,7 +99,7 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
         with torch.no_grad():
             A = A.to(device)
             B = B.to(device)
-            Y = mask.to(device).unsqueeze(1).float()  # Add channel dimension and cast to float
+            Y = mask.to(device).float()  # The original data loader already returns proper shape
             preds = net(A,B)[1]
             output = F.sigmoid(preds)
             output[output >= 0.5] = 1
