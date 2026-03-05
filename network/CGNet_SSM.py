@@ -1,7 +1,6 @@
-# ============================================================
-# CGNet-SSM v2
-# Change Guiding Network with Prior-Conditioned State Space
-# ============================================================
+#  Change Guiding Network with Recursive Prior State Space (CGNet_SSM)
+#  Incorporating recursive state-space dynamics with prior conditioning
+#  for change detection in remote sensing imagery
 
 import torch
 import torch.nn as nn
@@ -9,303 +8,303 @@ import torch.nn.functional as F
 from torchvision import models
 
 
-# ============================================================
-# Basic convolution block
-# ============================================================
-
 class BasicConv2d(nn.Module):
-
-    def __init__(self, in_planes, out_planes, kernel_size, stride=1, padding=0):
+    """Basic Conv2d block with BatchNorm and ReLU"""
+    def __init__(self, in_planes, out_planes, kernel_size, stride=1, padding=0, dilation=1):
         super(BasicConv2d, self).__init__()
-
-        self.conv = nn.Conv2d(
-            in_planes,
-            out_planes,
-            kernel_size,
-            stride,
-            padding,
-            bias=False
-        )
-
+        self.conv = nn.Conv2d(in_planes, out_planes,
+                              kernel_size=kernel_size, stride=stride,
+                              padding=padding, dilation=dilation, bias=False)
         self.bn = nn.BatchNorm2d(out_planes)
-
         self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
-
         x = self.conv(x)
         x = self.bn(x)
         x = self.relu(x)
-
         return x
 
 
-# ============================================================
-# Prior Conditioned State Space Module
-# ============================================================
-
-class PriorConditionedSSM(nn.Module):
-
-    def __init__(self, in_channels, hidden_dim):
-
-        super().__init__()
-
-        self.input_proj = nn.Conv2d(in_channels, hidden_dim, 1)
-
+class RecursivePriorStateSpace(nn.Module):
+    """
+    Recursive Prior State Space (RPSS) Module
+    
+    Applies recursive state-space dynamics with prior conditioning.
+    No attention, no softmax, no sigmoid - pure linear complexity O(HW).
+    """
+    
+    def __init__(self, in_channels, hidden_dim=128):
+        """
+        Args:
+            in_channels: Input feature dimension
+            hidden_dim: Hidden state dimension
+        """
+        super(RecursivePriorStateSpace, self).__init__()
+        self.in_channels = in_channels
+        self.hidden_dim = hidden_dim
+        
+        # Input projection
+        self.input_proj = nn.Conv2d(in_channels, hidden_dim, kernel_size=1)
+        
+        # State parameters
         self.A = nn.Parameter(torch.randn(hidden_dim))
         self.B = nn.Parameter(torch.randn(hidden_dim))
-
-        self.alpha = nn.Parameter(torch.tensor(0.1))
-        self.gamma = nn.Parameter(torch.tensor(0.1))
-
-        self.output_proj = nn.Conv2d(hidden_dim, in_channels, 1)
-
-        self.fusion = nn.Conv2d(hidden_dim * 4, hidden_dim, 1)
-
-    # --------------------------------------------------------
-
-    def scan_forward(self, x, A, B):
-
-        Bsz, C, H, W = x.shape
-
-        states = []
-
-        prev = None
-
-        for i in range(W):
-
-            x_i = x[:, :, :, i]
-
+        
+        # Gating parameters
+        self.alpha = nn.Parameter(torch.tensor(0.1))  # Prior injection strength
+        self.gamma = nn.Parameter(torch.tensor(0.1))  # Output residual strength
+        
+        # Output projection
+        self.output_proj = nn.Conv2d(hidden_dim, in_channels, kernel_size=1)
+        
+        self._init_parameters()
+    
+    def _init_parameters(self):
+        """Initialize parameters"""
+        nn.init.xavier_uniform_(self.input_proj.weight)
+        nn.init.xavier_uniform_(self.output_proj.weight)
+        nn.init.normal_(self.A, mean=0.0, std=0.1)
+        nn.init.normal_(self.B, mean=0.0, std=0.1)
+    
+    def forward(self, x, prior):
+        """
+        Forward pass with recursive state-space dynamics
+        
+        Args:
+            x: Input features [B, C, H, W]
+            prior: Prior guidance map [B, 1, H, W] or coarse prior
+            
+        Returns:
+            Output features [B, C, H, W]
+        """
+        batch_size, channels, height, width = x.shape
+        
+        # Normalize prior to [B, 1, H, W]
+        if prior.shape[1] != 1:
+            prior_normalized = prior.mean(dim=1, keepdim=True)
+        else:
+            prior_normalized = prior
+        
+        # Upsample prior to match resolution if needed
+        if prior_normalized.shape[2:] != x.shape[2:]:
+            prior_normalized = F.interpolate(prior_normalized, size=(height, width),
+                                            mode='bilinear', align_corners=True)
+        
+        # Clamp prior to reasonable range
+        prior_normalized = torch.clamp(prior_normalized, -1.0, 1.0)
+        
+        # Inject prior into original feature space (additive)
+        # Expand prior from [B, 1, H, W] to [B, C, H, W] by repeating
+        prior_expanded = prior_normalized.expand(batch_size, channels, height, width)
+        F_mod = x + self.alpha * prior_expanded
+        
+        # Project to hidden dimension for recursive computation
+        x_proj = self.input_proj(F_mod)  # [B, hidden_dim, H, W]
+        
+        # Constrain A with tanh for stability
+        A = torch.tanh(self.A)  # [hidden_dim]
+        B = self.B  # [hidden_dim]
+        
+        # Reshape for recursive computation
+        # For broadcasting: [1, hidden_dim, 1] broadcasts with [B, hidden_dim, H/W]
+        A_expanded = A.view(1, -1, 1)  # [1, hidden_dim, 1]
+        B_expanded = B.view(1, -1, 1)  # [1, hidden_dim, 1]
+        
+        # Horizontal recursive dynamics along width dimension
+        # NOTE: avoid in-place slice assignment to keep autograd graph stable.
+        h_horizontal_steps = []
+        prev_h = None
+        for i in range(width):
+            x_i = x_proj[:, :, :, i]
             if i == 0:
-
-                h = B * x_i
-
+                h_i = B_expanded * x_i
             else:
-
-                h = A * prev + B * x_i
-
-            states.append(h)
-
-            prev = h
-
-        states = torch.stack(states, dim=-1)
-
-        return states
-
-    # --------------------------------------------------------
-
-    def scan_backward(self, x, A, B):
-
-        Bsz, C, H, W = x.shape
-
-        states = [None] * W
-
-        prev = None
-
-        for idx, i in enumerate(reversed(range(W))):
-
-            x_i = x[:, :, :, i]
-
-            if idx == 0:
-
-                h = B * x_i
-
+                h_i = A_expanded * prev_h.detach() + B_expanded * x_i
+            h_horizontal_steps.append(h_i)
+            prev_h = h_i
+        h_horizontal = torch.stack(h_horizontal_steps, dim=-1)
+        
+        # Vertical recursive dynamics along height dimension
+        # NOTE: avoid in-place slice assignment to keep autograd graph stable.
+        h_vertical_steps = []
+        prev_h = None
+        for j in range(height):
+            x_j = x_proj[:, :, j, :]
+            if j == 0:
+                h_j = B_expanded * x_j
             else:
-
-                h = A * prev + B * x_i
-
-            states[i] = h
-
-            prev = h
-
-        states = torch.stack(states, dim=-1)
-
-        return states
-
-    # --------------------------------------------------------
-
-    def forward(self, F_in, prior):
-
-        Bsz, C, H, W = F_in.shape
-
-        if prior.shape[2:] != (H, W):
-
-            prior = F.interpolate(
-                prior,
-                size=(H, W),
-                mode="bilinear",
-                align_corners=True
-            )
-
-        prior = prior.repeat(1, C, 1, 1)
-
-        F_mod = F_in + self.alpha * prior
-
-        x = self.input_proj(F_mod)
-
-        A = torch.tanh(self.A).view(1, -1, 1)
-        Bp = self.B.view(1, -1, 1)
-
-        # horizontal scans
-
-        h_lr = self.scan_forward(x, A, Bp)
-        h_rl = self.scan_backward(x, A, Bp)
-
-        # vertical scans
-
-        x_t = x.permute(0, 1, 3, 2)
-
-        h_tb = self.scan_forward(x_t, A, Bp)
-        h_bt = self.scan_backward(x_t, A, Bp)
-
-        h_tb = h_tb.permute(0, 1, 3, 2)
-        h_bt = h_bt.permute(0, 1, 3, 2)
-
-        h = torch.cat([h_lr, h_rl, h_tb, h_bt], dim=1)
-
-        h = self.fusion(h)
-
-        out = self.output_proj(h)
-
+                h_j = A_expanded * prev_h.detach() + B_expanded * x_j
+            h_vertical_steps.append(h_j)
+            prev_h = h_j
+        h_vertical = torch.stack(h_vertical_steps, dim=2)
+        
+        # Fusion of horizontal and vertical paths
+        h_fused = h_horizontal + h_vertical
+        
+        # Output projection
+        out = self.output_proj(h_fused)  # [B, in_dim, H, W]
+        
+        # Final residual connection in original feature space
         F_out = F_mod + self.gamma * out
-
+        
         return F_out
 
 
-# ============================================================
-# CGNet with SSM
-# ============================================================
-
 class CGNet_SSM(nn.Module):
-
+    """
+    CGNet with Recursive Prior State Space Module
+    
+    Replaces ChangeGuideModule with RecursivePriorStateSpace for improved
+    prior-conditioned feature processing using state-space dynamics.
+    """
+    
     def __init__(self):
-
-        super().__init__()
-
-        vgg = models.vgg16_bn(weights=models.VGG16_BN_Weights.DEFAULT)
-
-        self.inc = vgg.features[:5]
-
-        self.down1 = vgg.features[5:12]
-        self.down2 = vgg.features[12:22]
-        self.down3 = vgg.features[22:32]
-        self.down4 = vgg.features[32:42]
-
-        self.conv_reduce_1 = BasicConv2d(128 * 2, 128, 3, 1, 1)
-        self.conv_reduce_2 = BasicConv2d(256 * 2, 256, 3, 1, 1)
-        self.conv_reduce_3 = BasicConv2d(512 * 2, 512, 3, 1, 1)
-        self.conv_reduce_4 = BasicConv2d(512 * 2, 512, 3, 1, 1)
-
-        # coarse change decoder
-
+        super(CGNet_SSM, self).__init__()
+        
+        # Load VGG16-BN backbone
+        try:
+            vgg16_bn = models.vgg16_bn(weights=models.VGG16_BN_Weights.DEFAULT)
+        except AttributeError:
+            # Fallback for older torchvision versions
+            vgg16_bn = models.vgg16_bn(pretrained=True)
+        
+        # Encoder: Feature extraction
+        self.inc = vgg16_bn.features[:5]      # 64 channels
+        self.down1 = vgg16_bn.features[5:12]  # 128 channels
+        self.down2 = vgg16_bn.features[12:22] # 256 channels
+        self.down3 = vgg16_bn.features[22:32] # 512 channels
+        self.down4 = vgg16_bn.features[32:42] # 512 channels
+        
+        # Feature fusion layers for bi-temporal fusion
+        self.conv_reduce_1 = BasicConv2d(128*2, 128, 3, 1, 1)
+        self.conv_reduce_2 = BasicConv2d(256*2, 256, 3, 1, 1)
+        self.conv_reduce_3 = BasicConv2d(512*2, 512, 3, 1, 1)
+        self.conv_reduce_4 = BasicConv2d(512*2, 512, 3, 1, 1)
+        
+        # Upsampling layers for coarse-to-fine prior propagation
+        self.up_layer4 = BasicConv2d(512, 512, 3, 1, 1)
+        self.up_layer3 = BasicConv2d(512, 512, 3, 1, 1)
+        self.up_layer2 = BasicConv2d(256, 256, 3, 1, 1)
+        
+        # Change map decoder (coarse)
         self.decoder = nn.Sequential(
             BasicConv2d(512, 64, 3, 1, 1),
             nn.Conv2d(64, 1, 3, 1, 1)
         )
-
+        
+        # Final output decoder
         self.decoder_final = nn.Sequential(
             BasicConv2d(128, 64, 3, 1, 1),
             nn.Conv2d(64, 1, 1)
         )
-
-        # SSM modules
-
-        self.ssm1 = PriorConditionedSSM(128, 64)
-        self.ssm2 = PriorConditionedSSM(256, 128)
-        self.ssm3 = PriorConditionedSSM(512, 256)
-
-        # decoder refinement
-
+        
+        # Recursive Prior State Space modules for prior-conditioned processing
+        self.rpss_1 = RecursivePriorStateSpace(in_channels=128, hidden_dim=64)
+        self.rpss_2 = RecursivePriorStateSpace(in_channels=256, hidden_dim=128)
+        self.rpss_3 = RecursivePriorStateSpace(in_channels=512, hidden_dim=256)
+        self.rpss_4 = RecursivePriorStateSpace(in_channels=512, hidden_dim=256)
+        
+        # Decoder modules for coarse-to-fine refinement
         self.decoder_module4 = BasicConv2d(1024, 512, 3, 1, 1)
         self.decoder_module3 = BasicConv2d(768, 256, 3, 1, 1)
         self.decoder_module2 = BasicConv2d(384, 128, 3, 1, 1)
-
-        self.up2x = nn.UpsamplingBilinear2d(scale_factor=2)
-
-    # --------------------------------------------------------
-
+        
+        # Upsampling operator
+        self.upsample2x = nn.UpsamplingBilinear2d(scale_factor=2)
+    
     def forward(self, A, B):
-
-        size = A.shape[2:]
-
-        # encoder
-
-        l1A = self.down1(self.inc(A))
-        l2A = self.down2(l1A)
-        l3A = self.down3(l2A)
-        l4A = self.down4(l3A)
-
-        l1B = self.down1(self.inc(B))
-        l2B = self.down2(l1B)
-        l3B = self.down3(l2B)
-        l4B = self.down4(l3B)
-
-        # fusion
-
-        l1 = self.conv_reduce_1(torch.cat([l1A, l1B], 1))
-        l2 = self.conv_reduce_2(torch.cat([l2A, l2B], 1))
-        l3 = self.conv_reduce_3(torch.cat([l3A, l3B], 1))
-        l4 = self.conv_reduce_4(torch.cat([l4A, l4B], 1))
-
-        # coarse change map
-
-        coarse = self.decoder(l4)
-
-        # layer3
-
-        prior3 = F.interpolate(coarse, size=l3.shape[2:], mode="bilinear", align_corners=True)
-
-        l3 = self.ssm3(l3, prior3)
-
-        f4 = self.decoder_module4(torch.cat([self.up2x(l4), l3], 1))
-
-        # layer2
-
-        prior2 = F.interpolate(coarse, size=l2.shape[2:], mode="bilinear", align_corners=True)
-
-        l2 = self.ssm2(l2, prior2)
-
-        f3 = self.decoder_module3(torch.cat([self.up2x(f4), l2], 1))
-
-        # layer1
-
-        prior1 = F.interpolate(coarse, size=l1.shape[2:], mode="bilinear", align_corners=True)
-
-        l1 = self.ssm1(l1, prior1)
-
-        f2 = self.decoder_module2(torch.cat([self.up2x(f3), l1], 1))
-
-        # outputs
-
-        change_map = F.interpolate(coarse, size=size, mode="bilinear", align_corners=True)
-
-        final_map = self.decoder_final(f2)
-
-        final_map = F.interpolate(final_map, size=size, mode="bilinear", align_corners=True)
-
+        """
+        Forward pass with dual-temporal inputs and RPSS-based prior conditioning
+        
+        Args:
+            A: First temporal image [B, 3, H, W]
+            B: Second temporal image [B, 3, H, W]
+            
+        Returns:
+            change_map: Change map output [B, 1, H, W]
+            final_map: Final refined map [B, 1, H, W]
+        """
+        size = A.size()[2:]
+        
+        # ===== Encoder: Extract multi-scale features =====
+        # Image A features
+        layer1_pre_A = self.inc(A)
+        layer1_A = self.down1(layer1_pre_A)
+        layer2_A = self.down2(layer1_A)
+        layer3_A = self.down3(layer2_A)
+        layer4_A = self.down4(layer3_A)
+        
+        # Image B features
+        layer1_pre_B = self.inc(B)
+        layer1_B = self.down1(layer1_pre_B)
+        layer2_B = self.down2(layer1_B)
+        layer3_B = self.down3(layer2_B)
+        layer4_B = self.down4(layer3_B)
+        
+        # Bi-temporal fusion: concatenate A and B temporal pairs
+        layer1 = torch.cat((layer1_B, layer1_A), dim=1)  # [B, 256, H/4, W/4]
+        layer2 = torch.cat((layer2_B, layer2_A), dim=1)  # [B, 512, H/8, W/8]
+        layer3 = torch.cat((layer3_B, layer3_A), dim=1)  # [B, 1024, H/16, W/16]
+        layer4 = torch.cat((layer4_B, layer4_A), dim=1)  # [B, 1024, H/32, W/32]
+        
+        # Feature dimension reduction
+        layer1 = self.conv_reduce_1(layer1)
+        layer2 = self.conv_reduce_2(layer2)
+        layer3 = self.conv_reduce_3(layer3)
+        layer4 = self.conv_reduce_4(layer4)
+        
+        # ===== Generate coarse change prior at highest level =====
+        change_map_coarse = self.decoder(layer4)  # [B, 1, H/32, W/32]
+        
+        # ===== Coarse-to-fine propagation with RPSS =====
+        # Upsample prior and apply RPSS at layer3
+        change_map_up = F.interpolate(change_map_coarse, size=layer3.size()[2:],
+                                      mode='bilinear', align_corners=True)
+        layer3_enhanced = self.rpss_3(layer3, change_map_up)
+        
+        # Decoder and refinement at layer3
+        feature4 = self.decoder_module4(torch.cat([self.upsample2x(layer4), layer3_enhanced], 1))
+        
+        # Upsample prior and apply RPSS at layer2
+        change_map_up = F.interpolate(change_map_coarse, size=layer2.size()[2:],
+                                      mode='bilinear', align_corners=True)
+        layer2_enhanced = self.rpss_2(layer2, change_map_up)
+        
+        # Decoder and refinement at layer2
+        feature3 = self.decoder_module3(torch.cat([self.upsample2x(feature4), layer2_enhanced], 1))
+        
+        # Upsample prior and apply RPSS at layer1
+        change_map_up = F.interpolate(change_map_coarse, size=layer1.size()[2:],
+                                      mode='bilinear', align_corners=True)
+        layer1_enhanced = self.rpss_1(layer1, change_map_up)
+        
+        # Final decoder
+        layer1_final = self.decoder_module2(torch.cat([self.upsample2x(feature3), layer1_enhanced], 1))
+        
+        # ===== Generate final outputs =====
+        change_map = F.interpolate(change_map_coarse, size=size,
+                                   mode='bilinear', align_corners=True)
+        final_map = self.decoder_final(layer1_final)
+        final_map = F.interpolate(final_map, size=size,
+                                  mode='bilinear', align_corners=True)
+        
         return change_map, final_map
 
 
-# ============================================================
-# Test block
-# ============================================================
-
-if __name__ == "__main__":
-
+if __name__ == '__main__':
+    # Test module
     print("Testing CGNet_SSM...")
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    model = CGNet_SSM().to(device)
-
-    A = torch.randn(2, 3, 256, 256).to(device)
-    B = torch.randn(2, 3, 256, 256).to(device)
-
+    
+    model = CGNet_SSM().cuda()
+    A = torch.randn(2, 3, 256, 256).cuda()
+    B = torch.randn(2, 3, 256, 256).cuda()
+    
     change_map, final_map = model(A, B)
-
-    print("Change map shape:", change_map.shape)
-    print("Final map shape:", final_map.shape)
-
-    params = sum(p.numel() for p in model.parameters())
-
-    print("Total parameters:", params)
+    
+    print(f"✓ CGNet_SSM test passed!")
+    print(f"  Input shapes: A={A.shape}, B={B.shape}")
+    print(f"  Output shapes: change_map={change_map.shape}, final_map={final_map.shape}")
+    
+    # Count parameters
+    num_params = sum(p.numel() for p in model.parameters())
+    print(f"  Total parameters: {num_params:,}")
