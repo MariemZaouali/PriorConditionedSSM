@@ -17,6 +17,8 @@ from tqdm import tqdm
 import random
 from utils.utils import clip_gradient, adjust_lr
 from utils.metrics import Evaluator
+import json
+import datetime
 
 from network.CGNet import HCGMNet, CGNet
 
@@ -38,7 +40,17 @@ def seed_everything(seed):
 def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, net, criterion, optimizer, num_epoches, device):
     vis = visual.Visualization()
     vis.create_summary(data_name)
-    global best_iou
+    global best_iou, best_f1, best_precision, best_recall, best_oa, best_kappa
+    global best_metrics, all_metrics
+    
+    # Initialize best metrics tracking
+    if not hasattr(train, 'best_metrics'):
+        train.best_metrics = {
+            'iou': 0.0, 'f1': 0.0, 'precision': 0.0, 'recall': 0.0, 
+            'oa': 0.0, 'kappa': 0.0, 'epoch': 0
+        }
+        train.all_metrics = []
+    
     epoch_loss = 0
     net.train(True)
 
@@ -73,24 +85,31 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
         Eva_train.add_batch(target, pred)
 
         length += 1
-    IoU = Eva_train.Intersection_over_Union()[1]
-    Pre = Eva_train.Precision()[1]
-    Recall = Eva_train.Recall()[1]
-    F1 = Eva_train.F1()[1]
+    
+    # Training metrics
+    train_iou = Eva_train.Intersection_over_Union()[1]
+    train_pre = Eva_train.Precision()[1]
+    train_recall = Eva_train.Recall()[1]
+    train_f1 = Eva_train.F1()[1]
+    train_oa = Eva_train.OA()[1]
+    train_kappa = Eva_train.Kappa()[1]
     train_loss = epoch_loss / length
 
-    vis.add_scalar(epoch, IoU, 'mIoU')
-    vis.add_scalar(epoch, Pre, 'Precision')
-    vis.add_scalar(epoch, Recall, 'Recall')
-    vis.add_scalar(epoch, F1, 'F1')
+    # Add training metrics to visualization
+    vis.add_scalar(epoch, train_iou, 'train_mIoU')
+    vis.add_scalar(epoch, train_pre, 'train_Precision')
+    vis.add_scalar(epoch, train_recall, 'train_Recall')
+    vis.add_scalar(epoch, train_f1, 'train_F1')
+    vis.add_scalar(epoch, train_oa, 'train_OA')
+    vis.add_scalar(epoch, train_kappa, 'train_Kappa')
     vis.add_scalar(epoch, train_loss, 'train_loss')
 
     print(
-        'Epoch [%d/%d], Loss: %.4f,\n[Training]IoU: %.4f, Precision:%.4f, Recall: %.4f, F1: %.4f' % (
+        'Epoch [%d/%d], Loss: %.4f,\n[Training] IoU: %.4f, Precision: %.4f, Recall: %.4f, F1: %.4f, OA: %.4f, Kappa: %.4f' % (
             epoch, num_epoches, \
             train_loss, \
-            IoU, Pre, Recall, F1))
-    print("Strat validing!")
+            train_iou, train_pre, train_recall, train_f1, train_oa, train_kappa))
+    print("Starting validation!")
 
 
     net.train(False)
@@ -114,20 +133,100 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
             Eva_val.add_batch(target, pred)
 
             length += 1
-    IoU = Eva_val.Intersection_over_Union()
-    Pre = Eva_val.Precision()
-    Recall = Eva_val.Recall()
-    F1 = Eva_val.F1()
+    
+    # Validation metrics
+    val_iou = Eva_val.Intersection_over_Union()[1]
+    val_pre = Eva_val.Precision()[1]
+    val_recall = Eva_val.Recall()[1]
+    val_f1 = Eva_val.F1()[1]
+    val_oa = Eva_val.OA()[1]
+    val_kappa = Eva_val.Kappa()[1]
 
-    print('[Validation] IoU: %.4f, Precision:%.4f, Recall: %.4f, F1: %.4f' % (IoU[1], Pre[1], Recall[1], F1[1]))
-    new_iou = IoU[1]
-    if new_iou >= best_iou:
-        best_iou = new_iou
-        best_epoch = epoch
+    # Add validation metrics to visualization
+    vis.add_scalar(epoch, val_iou, 'val_mIoU')
+    vis.add_scalar(epoch, val_pre, 'val_Precision')
+    vis.add_scalar(epoch, val_recall, 'val_Recall')
+    vis.add_scalar(epoch, val_f1, 'val_F1')
+    vis.add_scalar(epoch, val_oa, 'val_OA')
+    vis.add_scalar(epoch, val_kappa, 'val_Kappa')
+
+    print('[Validation] IoU: %.4f, Precision: %.4f, Recall: %.4f, F1: %.4f, OA: %.4f, Kappa: %.4f' % (
+        val_iou, val_pre, val_recall, val_f1, val_oa, val_kappa))
+    
+    # Create comprehensive metrics dictionary for this epoch
+    current_metrics = {
+        'epoch': epoch,
+        'train_loss': float(train_loss),
+        'train': {
+            'iou': float(train_iou),
+            'precision': float(train_pre),
+            'recall': float(train_recall),
+            'f1': float(train_f1),
+            'oa': float(train_oa),
+            'kappa': float(train_kappa)
+        },
+        'val': {
+            'iou': float(val_iou),
+            'precision': float(val_pre),
+            'recall': float(val_recall),
+            'f1': float(val_f1),
+            'oa': float(val_oa),
+            'kappa': float(val_kappa)
+        }
+    }
+    
+    # Store all metrics
+    train.all_metrics.append(current_metrics)
+    
+    # Save all metrics to JSON file
+    metrics_file = os.path.join(save_path, 'all_metrics.json')
+    with open(metrics_file, 'w') as f:
+        json.dump(train.all_metrics, f, indent=2)
+    
+    # Check for best metrics and save checkpoints
+    if val_iou >= train.best_metrics['iou']:
+        train.best_metrics['iou'] = val_iou
+        train.best_metrics['f1'] = val_f1
+        train.best_metrics['precision'] = val_pre
+        train.best_metrics['recall'] = val_recall
+        train.best_metrics['oa'] = val_oa
+        train.best_metrics['kappa'] = val_kappa
+        train.best_metrics['epoch'] = epoch
+        
         best_net = net.state_dict()
-        print('Best Model Iou :%.4f; F1 :%.4f; Best epoch : %d' % (IoU[1], F1[1], best_epoch))
-        torch.save(best_net, save_path + '_best_iou.pth')
-    print('Best Model Iou :%.4f; F1 :%.4f' % (best_iou, F1[1]))
+        print('New Best Model - IoU: %.4f, F1: %.4f, Precision: %.4f, Recall: %.4f, OA: %.4f, Kappa: %.4f, Epoch: %d' % (
+            val_iou, val_f1, val_pre, val_recall, val_oa, val_kappa, epoch))
+        
+        # Save best model checkpoint
+        checkpoint = {
+            'epoch': epoch,
+            'model_state_dict': best_net,
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': lr_scheduler.state_dict(),
+            'metrics': current_metrics,
+            'model_type': opt.model_type,
+            'data_name': data_name,
+            'timestamp': datetime.datetime.now().isoformat()
+        }
+        
+        torch.save(checkpoint, os.path.join(save_path, 'best_model_checkpoint.pth'))
+        torch.save(best_net, os.path.join(save_path, 'best_model_weights.pth'))
+        
+        # Save best metrics summary
+        best_metrics_summary = {
+            'best_epoch': epoch,
+            'model_type': opt.model_type,
+            'data_name': data_name,
+            'timestamp': datetime.datetime.now().isoformat(),
+            'metrics': train.best_metrics
+        }
+        with open(os.path.join(save_path, 'best_metrics.json'), 'w') as f:
+            json.dump(best_metrics_summary, f, indent=2)
+    
+    print('Current Best - IoU: %.4f, F1: %.4f, Precision: %.4f, Recall: %.4f, OA: %.4f, Kappa: %.4f, Epoch: %d' % (
+        train.best_metrics['iou'], train.best_metrics['f1'], train.best_metrics['precision'], 
+        train.best_metrics['recall'], train.best_metrics['oa'], train.best_metrics['kappa'], train.best_metrics['epoch']))
+    
     vis.close_summary()
 
 
