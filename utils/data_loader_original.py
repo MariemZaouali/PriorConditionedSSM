@@ -105,10 +105,10 @@ class ChangeDataset(data.Dataset):
         self.image_root_B =  root + 'B/'
         self.gt_root = root + 'label/'
         self.mosaic_ratio = mosaic_ratio
-        self.images_A = [self.image_root_A + f for f in os.listdir(self.image_root_A) if f.endswith('.jpg') or f.endswith('.png')]
-        self.images_B = [self.image_root_B + f for f in os.listdir(self.image_root_B) if f.endswith('.jpg') or f.endswith('.png')]
+        self.images_A = [self.image_root_A + f for f in os.listdir(self.image_root_A) if f.endswith('.jpg') or f.endswith('.png') or f.endswith('.tif')]
+        self.images_B = [self.image_root_B + f for f in os.listdir(self.image_root_B) if f.endswith('.jpg') or f.endswith('.png') or f.endswith('.tif')]
         self.gts = [self.gt_root + f for f in os.listdir(self.gt_root) if f.endswith('.jpg')
-                    or f.endswith('.png')]
+                    or f.endswith('.png') or f.endswith('.tif')]
         self.images_A = sorted(self.images_A)
         self.images_B = sorted(self.images_B)
         self.gts = sorted(self.gts)
@@ -252,10 +252,10 @@ class Test_ChangeDataset(data.Dataset):
         image_root_A =  root + 'A/'
         image_root_B =  root + 'B/'
         gt_root = root + 'label/'
-        self.images_A = [image_root_A + f for f in os.listdir(image_root_A) if f.endswith('.jpg') or f.endswith('.png')]
-        self.images_B = [image_root_B + f for f in os.listdir(image_root_B) if f.endswith('.jpg') or f.endswith('.png')]
+        self.images_A = [image_root_A + f for f in os.listdir(image_root_A) if f.endswith('.jpg') or f.endswith('.png') or f.endswith('.tif')]
+        self.images_B = [image_root_B + f for f in os.listdir(image_root_B) if f.endswith('.jpg') or f.endswith('.png') or f.endswith('.tif')]
         self.gts = [gt_root + f for f in os.listdir(gt_root) if f.endswith('.jpg')
-                    or f.endswith('.png')]
+                    or f.endswith('.png') or f.endswith('.tif')]
         self.images_A = sorted(self.images_A)
         self.images_B = sorted(self.images_B)
         self.gts = sorted(self.gts)

@@ -58,7 +58,7 @@ def create_test_dataset(output_dir='./data/LEVIR-CD', num_samples=4, img_size=25
             
             print(f"  Created {split} sample {idx+1}/{num_samples}")
     
-    print(f"\n✓ Test dataset created successfully!")
+    print(f"\nTest dataset created successfully!")
     print(f"  Location: {dataset_root}")
     print(f"  Train samples: {num_samples}")
     print(f"  Val samples: {num_samples}")

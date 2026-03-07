@@ -32,7 +32,7 @@ def download_levir_cd(dataset_path='./data'):
     Download LEVIR-CD dataset
     Note: You may need to download manually from:
     https://justchenhao.github.io/LEVIR/
-    Or from Baidu Cloud: https://pan.baidu.com/s/1VVry18KFl2MSWS6_IOlYRA?pwd=2023
+    Or from Baidu Cloud: https://pan.baidu.com/s/1VVry18KFl2MSWS6_IOlYRA?pwd=l7iv
     """
     
     print("=" * 60)
@@ -41,7 +41,7 @@ def download_levir_cd(dataset_path='./data'):
     
     print("\nDocumentation:")
     print("- Official: https://justchenhao.github.io/LEVIR/")
-    print("- Baidu Cloud: https://pan.baidu.com/s/1VVry18KFl2MSWS6_IOlYRA?pwd=2023 (pwd: 2023)")
+    print("- Baidu Cloud: https://pan.baidu.com/s/1VVry18KFl2MSWS6_IOlYRA?pwd=l7iv (pwd: 2023)")
     print("\nSteps:")
     print("1. Download from Baidu Cloud (recommended, faster)")
     print("2. Extract the zip file")

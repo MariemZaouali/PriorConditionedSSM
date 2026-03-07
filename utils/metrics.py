@@ -22,7 +22,7 @@ class Evaluator(object):
 
     def OA(self):
         OA = np.trace(self.confusion_matrix) / np.sum(self.confusion_matrix)
-        return OA
+        return np.array([0.0, OA])  # Return array format consistent with other metrics
 
     def Kappa(self):
         pe_rows = np.sum(self.confusion_matrix, axis=0)
@@ -30,7 +30,8 @@ class Evaluator(object):
         sum_total = np.sum(self.confusion_matrix)
         pe = np.dot(pe_rows, pe_cols) / float(sum_total ** 2)
         po = np.trace(self.confusion_matrix) / float(sum_total)
-        return (po - pe) / (1 - pe)
+        kappa = (po - pe) / (1 - pe)
+        return np.array([0.0, kappa])  # Return array format consistent with other metrics
 
     def Pixel_Accuracy(self):
         Acc = np.diag(self.confusion_matrix) / np.sum(self.confusion_matrix, axis=1)
