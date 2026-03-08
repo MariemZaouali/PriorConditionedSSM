@@ -91,8 +91,8 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
     train_pre = Eva_train.Precision()[1]
     train_recall = Eva_train.Recall()[1]
     train_f1 = Eva_train.F1()[1]
-    train_oa = Eva_train.OA()[1]
-    train_kappa = Eva_train.Kappa()[1]
+    train_oa = Eva_train.OA()
+    train_kappa = Eva_train.Kappa()
     train_loss = epoch_loss / length
 
     # Add training metrics to visualization
@@ -139,8 +139,8 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
     val_pre = Eva_val.Precision()[1]
     val_recall = Eva_val.Recall()[1]
     val_f1 = Eva_val.F1()[1]
-    val_oa = Eva_val.OA()[1]
-    val_kappa = Eva_val.Kappa()[1]
+    val_oa = Eva_val.OA()
+    val_kappa = Eva_val.Kappa()
 
     # Add validation metrics to visualization
     vis.add_scalar(epoch, val_iou, 'val_mIoU')
