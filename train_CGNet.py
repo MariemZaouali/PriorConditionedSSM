@@ -197,7 +197,12 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
         print('New Best Model - IoU: %.4f, F1: %.4f, Precision: %.4f, Recall: %.4f, OA: %.4f, Kappa: %.4f, Epoch: %d' % (
             val_iou, val_f1, val_pre, val_recall, val_oa, val_kappa, epoch))
         
-        # Save best model checkpoint
+        # Save best model checkpoint with model name in filename
+        model_name_suffix = opt.model_type  # CGNet or CGNet_SSM
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # Save checkpoint with model name
+        checkpoint_filename = f'best_model_checkpoint_{model_name_suffix}_{timestamp}.pth'
         checkpoint = {
             'epoch': epoch,
             'model_state_dict': best_net,
@@ -209,8 +214,11 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
             'timestamp': datetime.datetime.now().isoformat()
         }
         
-        torch.save(checkpoint, os.path.join(save_path, 'best_model_checkpoint.pth'))
-        torch.save(best_net, os.path.join(save_path, 'best_model_weights.pth'))
+        torch.save(checkpoint, os.path.join(save_path, checkpoint_filename))
+        
+        # Save weights with model name
+        weights_filename = f'best_model_weights_{model_name_suffix}_{timestamp}.pth'
+        torch.save(best_net, os.path.join(save_path, weights_filename))
         
         # Save best metrics summary
         best_metrics_summary = {
