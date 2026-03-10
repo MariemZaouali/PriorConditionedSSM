@@ -36,7 +36,7 @@ def inference(model, img_A, img_B):
     with torch.no_grad():
         outputs = model(img_A, img_B)
         change_map = outputs[1]  # Final output
-        change_map = F.sigmoid(change_map)
+        change_map = torch.sigmoid(change_map)
     return change_map.squeeze().cpu().numpy()
 
 def main():
@@ -101,9 +101,9 @@ def main():
         label = load_label(args.label)
         label_uint8 = (label * 255).astype(np.uint8)
     
-    # Create visualization
-    num_cols = 3 if label is None else 4
-    fig, axes = plt.subplots(1, num_cols, figsize=(16, 5))
+    # Create visualization — always 4 columns:
+    #   T1 | T2 | Probability Map | Ground Truth (or Binary Prediction)
+    fig, axes = plt.subplots(1, 4, figsize=(20, 5))
     
     # Image T1
     axes[0].imshow(img_A_rgb)

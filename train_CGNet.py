@@ -57,20 +57,15 @@ def save_visualizations(epoch, A, B, Y, preds, gates, save_path, filename_prefix
     A_np = ((A_np - A_np.min()) / (A_np.max() - A_np.min()) * 255).astype(np.uint8)
     B_np = ((B_np - B_np.min()) / (B_np.max() - B_np.min()) * 255).astype(np.uint8)
     
-    # Process predictions
-    coarse_pred = F.sigmoid(preds[0]).detach().cpu().numpy().squeeze()
-    fine_pred = F.sigmoid(preds[1]).detach().cpu().numpy().squeeze()
+    # Process predictions - index [0] to take the first sample from the batch,
+    # then squeeze to remove any remaining size-1 dimensions.
+    coarse_pred = F.sigmoid(preds[0])[0].detach().cpu().numpy().squeeze()
+    fine_pred   = F.sigmoid(preds[1])[0].detach().cpu().numpy().squeeze()
     
     # Apply threshold for binary predictions
     coarse_binary = (coarse_pred >= 0.6).astype(np.uint8) * 255
-    fine_binary = (fine_pred >= 0.6).astype(np.uint8) * 255
-    ground_truth = (Y_np >= 0.5).astype(np.uint8) * 255
-    
-    # Handle batch dimension for predictions - take first sample
-    if coarse_binary.ndim == 3 and coarse_binary.shape[0] == 16:  # Batch dimension present
-        coarse_binary = coarse_binary[0]
-    if fine_binary.ndim == 3 and fine_binary.shape[0] == 16:  # Batch dimension present
-        fine_binary = fine_binary[0]
+    fine_binary   = (fine_pred   >= 0.6).astype(np.uint8) * 255
+    ground_truth  = (Y_np        >= 0.5).astype(np.uint8) * 255
     
     # Create figure with subplots
     fig, axes = plt.subplots(2, 4, figsize=(20, 10))
@@ -100,9 +95,10 @@ def save_visualizations(epoch, A, B, Y, preds, gates, save_path, filename_prefix
     
     # Gate masks visualization
     if gates is not None:
-        gate1_np = gates[0].detach().cpu().numpy().squeeze()
-        gate2_np = gates[1].detach().cpu().numpy().squeeze()
-        gate3_np = gates[2].detach().cpu().numpy().squeeze()
+        # Index [0] to select the first sample from the batch before squeezing.
+        gate1_np = gates[0][0].detach().cpu().numpy().squeeze()
+        gate2_np = gates[1][0].detach().cpu().numpy().squeeze()
+        gate3_np = gates[2][0].detach().cpu().numpy().squeeze()
         
         axes[1, 1].imshow(gate1_np, cmap='hot', vmin=0, vmax=1)
         axes[1, 1].set_title('Gate 1 (SSM1)')
