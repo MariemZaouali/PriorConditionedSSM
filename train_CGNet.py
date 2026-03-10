@@ -169,10 +169,28 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
         # For visualization, save first few samples
         if not viz_samples_saved and i < 3:  # Save first 3 samples
             try:
-                save_visualizations(epoch, A.cpu(), B.cpu(), Y.cpu(), preds, gates, save_path, f"train_sample_{i}")
+                # Ensure we have the right format for CGNet_SSM
+                if gates is not None:
+                    # Convert tuple of gates to list for visualization function
+                    gates_list = list(gates) if isinstance(gates, tuple) else gates
+                else:
+                    gates_list = None
+                
+                # Debug: Print tensor shapes and types
+                print(f"Debug - A shape: {A.shape}, B shape: {B.shape}, Y shape: {Y.shape}")
+                print(f"Debug - preds type: {type(preds)}, preds[0] shape: {preds[0].shape}, preds[1] shape: {preds[1].shape}")
+                if gates_list is not None:
+                    print(f"Debug - gates_list type: {type(gates_list)}, length: {len(gates_list)}")
+                    for j, gate in enumerate(gates_list):
+                        print(f"Debug - gate {j} shape: {gate.shape}")
+                
+                save_visualizations(epoch, A.cpu(), B.cpu(), Y.cpu(), preds, gates_list, save_path, f"train_sample_{i}")
                 viz_samples_saved = True
+                print(f"✓ Successfully saved visualization for epoch {epoch}, sample {i}")
             except Exception as e:
-                print(f"Warning: Could not save visualization for epoch {epoch}: {e}")
+                print(f"Warning: Could not save visualization for epoch {epoch}, sample {i}: {e}")
+                import traceback
+                traceback.print_exc()
         # For CGNet_SSM, use only the final_map (preds[1]) for loss computation
         # preds[0] is coarse map, preds[1] is final refined map
         final_pred = preds[1].float()
