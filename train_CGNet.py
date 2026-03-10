@@ -58,8 +58,8 @@ def save_visualizations(epoch, A, B, Y, preds, gates, save_path, filename_prefix
     B_np = ((B_np - B_np.min()) / (B_np.max() - B_np.min()) * 255).astype(np.uint8)
     
     # Process predictions
-    coarse_pred = F.sigmoid(preds[0]).cpu().numpy().squeeze()
-    fine_pred = F.sigmoid(preds[1]).cpu().numpy().squeeze()
+    coarse_pred = F.sigmoid(preds[0]).detach().cpu().numpy().squeeze()
+    fine_pred = F.sigmoid(preds[1]).detach().cpu().numpy().squeeze()
     
     # Apply threshold for binary predictions
     coarse_binary = (coarse_pred >= 0.6).astype(np.uint8) * 255
