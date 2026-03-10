@@ -48,9 +48,10 @@ def save_visualizations(epoch, A, B, Y, preds, gates, save_path, filename_prefix
     os.makedirs(viz_dir, exist_ok=True)
     
     # Convert tensors to numpy for visualization
-    A_np = A.cpu().numpy().squeeze().transpose(1, 2, 0)
-    B_np = B.cpu().numpy().squeeze().transpose(1, 2, 0)
-    Y_np = Y.cpu().numpy().squeeze()
+    # Handle batch dimension - take first sample from batch
+    A_np = A[0].cpu().numpy().transpose(1, 2, 0)  # Remove batch dim, keep CHW -> HWC
+    B_np = B[0].cpu().numpy().transpose(1, 2, 0)  # Remove batch dim, keep CHW -> HWC
+    Y_np = Y[0].cpu().numpy().squeeze()  # Remove batch and channel dims
     
     # Normalize images to 0-255 range for visualization
     A_np = ((A_np - A_np.min()) / (A_np.max() - A_np.min()) * 255).astype(np.uint8)
