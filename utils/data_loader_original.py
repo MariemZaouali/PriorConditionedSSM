@@ -117,7 +117,9 @@ class ChangeDataset(data.Dataset):
         self.img_transform = transforms.Compose([
             transforms.Resize((self.trainsize, self.trainsize)),
             transforms.ToTensor(),
-            transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])])
+            transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
+            transforms.RandomErasing(p=0.3, scale=(0.02, 0.15), value='random') # Added to simulate partial occlusion / clouds
+        ])
         self.gt_transform = transforms.Compose([
             transforms.Resize((self.trainsize, self.trainsize)),
             transforms.ToTensor()])
