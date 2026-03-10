@@ -60,7 +60,28 @@ def main():
         model = CGNet_SSM().to(device)
     
     checkpoint = torch.load(args.model, map_location=device)
-    model.load_state_dict(checkpoint)
+    
+    # Handle state dict key mismatch between old and new model versions
+    if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+        # New checkpoint format with optimizer and metadata
+        state_dict = checkpoint['model_state_dict']
+    else:
+        # Old checkpoint format with just model weights
+        state_dict = checkpoint
+    
+    # Map old keys to new keys for backward compatibility
+    new_state_dict = {}
+    for key, value in state_dict.items():
+        # Map old layer names to new layer names
+        new_key = key.replace('down1.', 'd1.').replace('down2.', 'd2.').replace('down3.', 'd3.').replace('down4.', 'd4.')
+        new_key = new_key.replace('conv_reduce_1.', 'red1.').replace('conv_reduce_2.', 'red2.')
+        new_key = new_key.replace('conv_reduce_3.', 'red3.').replace('conv_reduce_4.', 'red4.')
+        new_key = new_key.replace('decoder_module4.', 'dec_mod4.').replace('decoder_module3.', 'dec_mod3.')
+        new_key = new_key.replace('decoder_module2.', 'dec_mod2.').replace('decoder_final.', 'final.')
+        
+        new_state_dict[new_key] = value
+    
+    model.load_state_dict(new_state_dict)
     print("✓ Model loaded")
     
     # Load images
