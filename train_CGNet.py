@@ -80,8 +80,8 @@ def save_visualizations(epoch, A, B, Y, preds, gates, save_path, filename_prefix
     fine_pred   = F.sigmoid(preds[1])[0].detach().cpu().numpy().squeeze()
     
     # Apply threshold for binary predictions
-    coarse_binary = (coarse_pred >= 0.6).astype(np.uint8) * 255
-    fine_binary   = (fine_pred   >= 0.6).astype(np.uint8) * 255
+    coarse_binary = (coarse_pred >= 0.5).astype(np.uint8) * 255
+    fine_binary   = (fine_pred   >= 0.5).astype(np.uint8) * 255
     ground_truth  = (Y_np        >= 0.5).astype(np.uint8) * 255
     
     # Create figure with subplots
@@ -211,10 +211,9 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
                 print(f"Warning: Could not save visualization for epoch {epoch}, sample {i}: {e}")
                 import traceback
                 traceback.print_exc()
-        # For CGNet_SSM, use only the final_map (preds[1]) for loss computation
+        # For CGNet_SSM and CGNet, use Both Maps (Deep Supervision)
         # preds[0] is coarse map, preds[1] is final refined map
-        final_pred = preds[1].float()
-        loss = criterion(final_pred, Y)
+        loss = criterion(preds[0].float(), Y) + criterion(preds[1].float(), Y)
         
         # Add L1 regularization for RPSS gates to encourage selectivity
         if hasattr(net, 'ssm1') and hasattr(net.ssm1, 'gate'):
@@ -237,8 +236,8 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
         epoch_loss += loss.item()
 
         output = F.sigmoid(preds[1])
-        output[output >= 0.6] = 1  # Adjusted threshold from 0.5 to 0.6
-        output[output < 0.6] = 0
+        output[output >= 0.5] = 1  # Restored threshold to 0.5 from original paper
+        output[output < 0.5] = 0
         pred = output.squeeze(1).data.cpu().numpy().astype(int)  # Remove channel dimension
         target = Y.squeeze(1).cpu().numpy().astype(int)  # Remove channel dimension
         
