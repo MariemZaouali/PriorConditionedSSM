@@ -100,9 +100,9 @@ def save_visualizations(epoch, A, B, Y, preds, gates, save_path, filename_prefix
     
     # Gate masks visualization
     if gates is not None:
-        gate1_np = gates[0].cpu().numpy().squeeze()
-        gate2_np = gates[1].cpu().numpy().squeeze()
-        gate3_np = gates[2].cpu().numpy().squeeze()
+        gate1_np = gates[0].detach().cpu().numpy().squeeze()
+        gate2_np = gates[1].detach().cpu().numpy().squeeze()
+        gate3_np = gates[2].detach().cpu().numpy().squeeze()
         
         axes[1, 1].imshow(gate1_np, cmap='hot', vmin=0, vmax=1)
         axes[1, 1].set_title('Gate 1 (SSM1)')
