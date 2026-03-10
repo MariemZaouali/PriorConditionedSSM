@@ -66,6 +66,21 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
         # preds[0] is coarse map, preds[1] is final refined map
         final_pred = preds[1].float()
         loss = criterion(final_pred, Y)
+        
+        # Add L1 regularization for RPSS gates to encourage selectivity
+        if hasattr(net, 'ssm1') and hasattr(net.ssm1, 'gate'):
+            gate_l1_loss = 0.0
+            for ssm_module in [net.ssm1, net.ssm2, net.ssm3]:
+                # Get the gate output for regularization
+                # Note: We need to compute this during forward pass
+                # For now, we'll add a small L1 penalty on gate weights
+                gate_params = list(ssm_module.gate.parameters())
+                if gate_params:
+                    gate_l1_loss += sum(p.abs().sum() for p in gate_params)
+            
+            # Add L1 regularization to the loss
+            loss += 0.001 * gate_l1_loss
+        
         # ---- loss function ----
         loss.backward()
         optimizer.step()
@@ -73,8 +88,8 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
         epoch_loss += loss.item()
 
         output = F.sigmoid(preds[1])
-        output[output >= 0.5] = 1
-        output[output < 0.5] = 0
+        output[output >= 0.6] = 1  # Adjusted threshold from 0.5 to 0.6
+        output[output < 0.6] = 0
         pred = output.squeeze(1).data.cpu().numpy().astype(int)  # Remove channel dimension
         target = Y.squeeze(1).cpu().numpy().astype(int)  # Remove channel dimension
         
@@ -349,7 +364,10 @@ if __name__ == '__main__':
             opt.model_type = 'CGNet_SSM'
 
 
-    criterion = nn.BCEWithLogitsLoss().to(device)
+    # Weighted BCE Loss to handle class imbalance
+    # Increase weight for changed pixels (class 1) to handle imbalance
+    pos_weight = torch.tensor([5.0]).to(device)  # Weight changed pixels 5x more
+    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight).to(device)
 
 
     # optimizer = torch.optim.Adam(model.parameters(), opt.lr)

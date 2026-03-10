@@ -37,6 +37,9 @@ class RecursivePriorStateSpace(nn.Module):
             nn.Sigmoid()
         )
         
+        # L1 regularization strength for the gate output
+        self.gate_l1_weight = 0.001  # Regularization coefficient
+        
         # Paramètres SSM
         self.A = nn.Parameter(torch.randn(hidden_dim))
         self.B = nn.Parameter(torch.randn(hidden_dim))
