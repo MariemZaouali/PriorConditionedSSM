@@ -29,6 +29,23 @@ from network.CGNet import HCGMNet, CGNet
 import time
 import sys
 
+class BCEDiceLoss(nn.Module):
+    def __init__(self, pos_weight=None):
+        super(BCEDiceLoss, self).__init__()
+        self.bce = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+        
+    def forward(self, pred, target):
+        # BCE Loss
+        bce_loss = self.bce(pred, target)
+        
+        # Dice Loss
+        pred_sigmoid = torch.sigmoid(pred)
+        smooth = 1e-5
+        intersection = (pred_sigmoid * target).sum()
+        dice_loss = 1 - (2. * intersection + smooth) / (pred_sigmoid.sum() + target.sum() + smooth)
+        
+        return bce_loss + dice_loss
+
 start=time.time()
 
 def seed_everything(seed):
@@ -496,10 +513,10 @@ if __name__ == '__main__':
             opt.model_type = 'CGNet_SSM'
 
 
-    # Weighted BCE Loss to handle class imbalance
-    # Increase weight for changed pixels (class 1) to handle imbalance
-    pos_weight = torch.tensor([5.0]).to(device)  # Weight changed pixels 5x more
-    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight).to(device)
+    # Weighted BCE + Dice Loss to handle class imbalance
+    # Increase weight for changed pixels, but lowered to 2.0 to improve Precision
+    pos_weight = torch.tensor([2.0]).to(device)  # Reduced from 5.0 to 2.0
+    criterion = BCEDiceLoss(pos_weight=pos_weight).to(device)
 
 
     # optimizer = torch.optim.Adam(model.parameters(), opt.lr)
