@@ -66,6 +66,12 @@ def save_visualizations(epoch, A, B, Y, preds, gates, save_path, filename_prefix
     fine_binary = (fine_pred >= 0.6).astype(np.uint8) * 255
     ground_truth = (Y_np >= 0.5).astype(np.uint8) * 255
     
+    # Handle batch dimension for predictions - take first sample
+    if coarse_binary.ndim == 3 and coarse_binary.shape[0] == 16:  # Batch dimension present
+        coarse_binary = coarse_binary[0]
+    if fine_binary.ndim == 3 and fine_binary.shape[0] == 16:  # Batch dimension present
+        fine_binary = fine_binary[0]
+    
     # Create figure with subplots
     fig, axes = plt.subplots(2, 4, figsize=(20, 10))
     fig.suptitle(f'Epoch {epoch} - Sample Visualization', fontsize=16)
