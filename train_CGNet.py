@@ -19,6 +19,10 @@ from utils.utils import clip_gradient, adjust_lr
 from utils.metrics import Evaluator
 import json
 import datetime
+import os
+import matplotlib.pyplot as plt
+import numpy as np
+from PIL import Image
 
 from network.CGNet import HCGMNet, CGNet
 
@@ -36,6 +40,93 @@ def seed_everything(seed):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = True
 
+
+def save_visualizations(epoch, A, B, Y, preds, gates, save_path, filename_prefix="sample"):
+    """Save visualization of predictions and gate masks"""
+    # Create visualization directory
+    viz_dir = os.path.join(save_path, 'visualizations', f'epoch_{epoch}')
+    os.makedirs(viz_dir, exist_ok=True)
+    
+    # Convert tensors to numpy for visualization
+    A_np = A.cpu().numpy().squeeze().transpose(1, 2, 0)
+    B_np = B.cpu().numpy().squeeze().transpose(1, 2, 0)
+    Y_np = Y.cpu().numpy().squeeze()
+    
+    # Normalize images to 0-255 range for visualization
+    A_np = ((A_np - A_np.min()) / (A_np.max() - A_np.min()) * 255).astype(np.uint8)
+    B_np = ((B_np - B_np.min()) / (B_np.max() - B_np.min()) * 255).astype(np.uint8)
+    
+    # Process predictions
+    coarse_pred = F.sigmoid(preds[0]).cpu().numpy().squeeze()
+    fine_pred = F.sigmoid(preds[1]).cpu().numpy().squeeze()
+    
+    # Apply threshold for binary predictions
+    coarse_binary = (coarse_pred >= 0.6).astype(np.uint8) * 255
+    fine_binary = (fine_pred >= 0.6).astype(np.uint8) * 255
+    ground_truth = (Y_np >= 0.5).astype(np.uint8) * 255
+    
+    # Create figure with subplots
+    fig, axes = plt.subplots(2, 4, figsize=(20, 10))
+    fig.suptitle(f'Epoch {epoch} - Sample Visualization', fontsize=16)
+    
+    # Top row: Input images and ground truth
+    axes[0, 0].imshow(A_np)
+    axes[0, 0].set_title('Image A (Before)')
+    axes[0, 0].axis('off')
+    
+    axes[0, 1].imshow(B_np)
+    axes[0, 1].set_title('Image B (After)')
+    axes[0, 1].axis('off')
+    
+    axes[0, 2].imshow(ground_truth, cmap='gray')
+    axes[0, 2].set_title('Ground Truth')
+    axes[0, 2].axis('off')
+    
+    axes[0, 3].imshow(coarse_binary, cmap='gray')
+    axes[0, 3].set_title('Coarse Prediction')
+    axes[0, 3].axis('off')
+    
+    # Bottom row: Fine prediction and gate masks
+    axes[1, 0].imshow(fine_binary, cmap='gray')
+    axes[1, 0].set_title('Fine Prediction')
+    axes[1, 0].axis('off')
+    
+    # Gate masks visualization
+    if gates is not None:
+        gate1_np = gates[0].cpu().numpy().squeeze()
+        gate2_np = gates[1].cpu().numpy().squeeze()
+        gate3_np = gates[2].cpu().numpy().squeeze()
+        
+        axes[1, 1].imshow(gate1_np, cmap='hot', vmin=0, vmax=1)
+        axes[1, 1].set_title('Gate 1 (SSM1)')
+        axes[1, 1].axis('off')
+        
+        axes[1, 2].imshow(gate2_np, cmap='hot', vmin=0, vmax=1)
+        axes[1, 2].set_title('Gate 2 (SSM2)')
+        axes[1, 2].axis('off')
+        
+        axes[1, 3].imshow(gate3_np, cmap='hot', vmin=0, vmax=1)
+        axes[1, 3].set_title('Gate 3 (SSM3)')
+        axes[1, 3].axis('off')
+    else:
+        # If no gates, show fine prediction again or leave empty
+        axes[1, 1].text(0.5, 0.5, 'No Gates\n(CGNet)', ha='center', va='center', transform=axes[1, 1].transAxes)
+        axes[1, 1].set_title('Gate 1')
+        axes[1, 1].axis('off')
+        
+        axes[1, 2].text(0.5, 0.5, 'No Gates\n(CGNet)', ha='center', va='center', transform=axes[1, 2].transAxes)
+        axes[1, 2].set_title('Gate 2')
+        axes[1, 2].axis('off')
+        
+        axes[1, 3].text(0.5, 0.5, 'No Gates\n(CGNet)', ha='center', va='center', transform=axes[1, 3].transAxes)
+        axes[1, 3].set_title('Gate 3')
+        axes[1, 3].axis('off')
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(viz_dir, f'{filename_prefix}.png'), dpi=150, bbox_inches='tight')
+    plt.close()
+    
+    print(f"Saved visualization for epoch {epoch} at {viz_dir}/{filename_prefix}.png")
 
 def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, net, criterion, optimizer, num_epoches, device):
     vis = visual.Visualization()
@@ -56,12 +147,32 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
 
     length = 0
     st = time.time()
+    
+    # Save visualizations for first few samples of each epoch
+    viz_samples_saved = False
+    
     for i, (A, B, mask) in enumerate(tqdm(train_loader)):
         A = A.to(device)
         B = B.to(device)
         Y = mask.to(device).float()  # The original data loader already returns proper shape
         optimizer.zero_grad()
-        preds = net(A,B)
+        
+        # Get predictions and gates for visualization
+        if hasattr(net, 'ssm1') and opt.model_type == 'CGNet_SSM':
+            # For CGNet_SSM, get predictions and gate masks
+            coarse_pred, fine_pred, gates = net(A, B)
+            preds = (coarse_pred, fine_pred)
+        else:
+            preds = net(A, B)
+            gates = None
+        
+        # For visualization, save first few samples
+        if not viz_samples_saved and i < 3:  # Save first 3 samples
+            try:
+                save_visualizations(epoch, A.cpu(), B.cpu(), Y.cpu(), preds, gates, save_path, f"train_sample_{i}")
+                viz_samples_saved = True
+            except Exception as e:
+                print(f"Warning: Could not save visualization for epoch {epoch}: {e}")
         # For CGNet_SSM, use only the final_map (preds[1]) for loss computation
         # preds[0] is coarse map, preds[1] is final refined map
         final_pred = preds[1].float()

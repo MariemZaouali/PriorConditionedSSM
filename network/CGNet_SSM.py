@@ -75,7 +75,7 @@ class RecursivePriorStateSpace(nn.Module):
             return torch.stack(steps, dim=-1 if dim == 0 else 2)
 
         out = self.output_proj(scan(x_proj, 0) + scan(x_proj, 1))
-        return F_mod + self.gamma * out
+        return F_mod + self.gamma * out, mask  # Return both output and gate mask
 
 # ============================================================
 # 3. ARCHITECTURE CGNet_SSM
@@ -105,14 +105,14 @@ class CGNet_SSM(nn.Module):
         l1, l2, l3, l4 = self.red1(torch.cat([l1A, l1B], 1)), self.red2(torch.cat([l2A, l2B], 1)), self.red3(torch.cat([l3A, l3B], 1)), self.red4(torch.cat([l4A, l4B], 1))
 
         coarse = self.decoder_coarse(l4)
-        l3_ssm = self.ssm3(l3, coarse)
+        l3_ssm, gate3 = self.ssm3(l3, coarse)
         f4 = self.dec_mod4(torch.cat([self.up(l4), l3_ssm], 1))
-        l2_ssm = self.ssm2(l2, coarse)
+        l2_ssm, gate2 = self.ssm2(l2, coarse)
         f3 = self.dec_mod3(torch.cat([self.up(f4), l2_ssm], 1))
-        l1_ssm = self.ssm1(l1, coarse)
+        l1_ssm, gate1 = self.ssm1(l1, coarse)
         f2 = self.dec_mod2(torch.cat([self.up(f3), l1_ssm], 1))
 
-        return F.interpolate(coarse, size, mode="bilinear"), F.interpolate(self.final_head(f2), size, mode="bilinear")
+        return F.interpolate(coarse, size, mode="bilinear"), F.interpolate(self.final_head(f2), size, mode="bilinear"), (gate1, gate2, gate3)
 
 # ============================================================
 # 4. TEST
