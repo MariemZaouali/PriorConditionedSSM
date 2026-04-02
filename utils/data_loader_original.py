@@ -147,7 +147,9 @@ class ChangeDataset(data.Dataset):
         image_B = self.img_transform(image_B)
         gt = self.gt_transform(gt)
 
-        return image_A, image_B, gt
+        file_name = os.path.basename(self.images_A[index])
+
+        return image_A, image_B, gt, file_name
 
 
     def load_img_and_mask(self, index):
