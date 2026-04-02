@@ -171,9 +171,6 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
     # Save visualizations for first few samples of each epoch
     viz_samples_saved = False
     
-    discarded_count = 0
-    discarded_images_names = []
-    
     for i, (A, B, mask, filenames) in enumerate(tqdm(train_loader)):
         A = A.to(device)
         B = B.to(device)
@@ -216,34 +213,7 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
                 traceback.print_exc()
         # For CGNet_SSM and CGNet, use Both Maps (Deep Supervision)
         # preds[0] is coarse map, preds[1] is final refined map
-        
-        # --- FILTRAGE DES IMAGES DIFFICILES (IoU < 0.5) ---
-        with torch.no_grad():
-            pred_binary = (torch.sigmoid(preds[1]) >= 0.5).int()
-            target_binary = (Y >= 0.5).int()
-            
-            valid_indices = []
-            batch_size = A.size(0)
-            for b in range(batch_size):
-                intersection = (pred_binary[b] & target_binary[b]).float().sum()
-                union = (pred_binary[b] | target_binary[b]).float().sum()
-                iou = (intersection / union) if union > 0 else torch.tensor(1.0, device=device)
-                
-                # On filtre si l'IoU < 0.5 ET qu'on a dépassé l'époque 2 (pour laisser le modèle démarrer tranquillement)
-                if iou >= 0.5 or epoch <= 2:
-                    valid_indices.append(b)
-                else:
-                    discarded_images_names.append(filenames[b])
-                    discarded_count += 1
-                    
-        # Si le batch entier est à écarter, on passe au suivant
-        if len(valid_indices) == 0:
-            continue
-            
-        valid_indices = torch.tensor(valid_indices, device=device)
-        
-        # Calcul de la Loss uniquement sur les images "validées"
-        loss = criterion(preds[0][valid_indices].float(), Y[valid_indices]) + criterion(preds[1][valid_indices].float(), Y[valid_indices])
+        loss = criterion(preds[0].float(), Y) + criterion(preds[1].float(), Y)
         
         # Add L1 regularization for RPSS gates to encourage selectivity
         if hasattr(net, 'ssm1') and hasattr(net.ssm1, 'gate'):
@@ -303,12 +273,6 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
             train_loss, \
             train_iou, train_pre, train_recall, train_f1, train_oa, train_kappa))
             
-    if discarded_count > 0:
-        print(f"\n[⚠️] Attention : {discarded_count} images particulièrement difficiles (IoU < 0.5) ont été écartées de l'optimisation à cette époque.")
-        print(f"[*] Fichiers écartés (aperçu) : {discarded_images_names[:25]} ...")
-    elif epoch > 2:
-        print("\n[✅] Super : Aucune image n'a été écartée à cette époque ! Toutes ont une IoU >= 0.5.")
-        
     print("Starting validation!")
 
 
