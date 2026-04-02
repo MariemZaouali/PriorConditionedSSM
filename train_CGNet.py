@@ -425,6 +425,10 @@ if __name__ == '__main__':
                         default='./output/')
     parser.add_argument('--offline_aug_num', type=int, default=1,
                         help='Number of offline augmentations per image (0 to disable)')
+    parser.add_argument('--optuna_trials', type=int, default=0,
+                        help='Number of Optuna trials to find best hyperparameters before full training (0 to disable)')
+    parser.add_argument('--optuna_epochs', type=int, default=3,
+                        help='Number of epochs per Optuna trial (keep it small)')
     opt = parser.parse_args()
 
     # set the device for training
@@ -530,15 +534,104 @@ if __name__ == '__main__':
             opt.model_type = 'CGNet_SSM'
 
 
-    # Weighted BCE + Dice Loss to handle class imbalance
-    # Increase weight for changed pixels, but lowered to 2.0 to improve Precision
-    pos_weight = torch.tensor([2.0]).to(device)  # Reduced from 5.0 to 2.0
+    # ====== OPTUNA HYPERPARAMETER SEARCH ======
+    best_lr = opt.lr
+    best_weight_decay = 0.0025
+    best_pos_weight = 2.0
+
+    if getattr(opt, 'optuna_trials', 0) > 0:
+        try:
+            import optuna
+            print(f"[*] Démarrage de la recherche Optuna pour {opt.optuna_trials} essais (trials)...")
+            
+            # Reduce logging to console
+            optuna.logging.set_verbosity(optuna.logging.WARNING)
+            
+            def objective(trial):
+                # Espace de recherche
+                trial_lr = trial.suggest_float('lr', 1e-5, 1e-3, log=True)
+                trial_wd = trial.suggest_float('weight_decay', 1e-4, 1e-2, log=True)
+                trial_pw = trial.suggest_float('pos_weight', 1.0, 4.0)
+
+                # Initialize fresh model based on model_type
+                if opt.model_type == 'CGNet':
+                    from network.CGNet import CGNet
+                    t_model = CGNet().to(device)
+                elif opt.model_type == 'CGNet_SSM':
+                    from network.CGNet_SSM import CGNet_SSM
+                    t_model = CGNet_SSM().to(device)
+                    
+                t_criterion = BCEDiceLoss(pos_weight=torch.tensor([trial_pw]).to(device)).to(device)
+                t_optimizer = torch.optim.AdamW(t_model.parameters(), lr=trial_lr, weight_decay=trial_wd)
+                
+                from utils.metrics import Evaluator
+                t_eva_val = Evaluator(num_class=2)
+                best_trial_iou = 0.0
+                optuna_epochs = getattr(opt, 'optuna_epochs', 3) # Very fast runs
+                
+                for epoch in range(optuna_epochs):
+                    t_model.train()
+                    for A, B, mask in train_loader:
+                        A, B, Y = A.to(device), B.to(device), mask.to(device).float()
+                        t_optimizer.zero_grad()
+                        if hasattr(t_model, 'ssm1') and opt.model_type == 'CGNet_SSM':
+                            preds = t_model(A, B)
+                            preds = (preds[0], preds[1]) # Ignore les gates
+                        else:
+                            preds = t_model(A, B)
+                        loss = t_criterion(preds[0].float(), Y) + t_criterion(preds[1].float(), Y)
+                        loss.backward()
+                        t_optimizer.step()
+                        
+                    t_model.eval()
+                    t_eva_val.reset()
+                    with torch.no_grad():
+                        for A, B, mask, _ in val_loader:
+                            A, B, Y = A.to(device), B.to(device), mask.to(device).float()
+                            preds = t_model(A, B)[1]
+                            preds = torch.nn.functional.sigmoid(preds)
+                            pred = (preds >= 0.5).int().squeeze(1).cpu().numpy()
+                            target = Y.squeeze(1).cpu().numpy().astype(int)
+                            if target.max() > 1: target = target // 255
+                            t_eva_val.add_batch(target, pred)
+                            
+                    val_iou = t_eva_val.Intersection_over_Union()[1]
+                    if val_iou > best_trial_iou:
+                        best_trial_iou = val_iou
+                        
+                    # Rapport à Optuna pour pruning (arrêt précoce si mauvais param)
+                    trial.report(val_iou, epoch)
+                    if trial.should_prune():
+                        raise optuna.exceptions.TrialPruned()
+                        
+                return best_trial_iou
+
+            study = optuna.create_study(direction='maximize')
+            study.optimize(objective, n_trials=opt.optuna_trials)
+            
+            print("\n==========================================================")
+            print("[✅] Optuna Recherche Terminée !")
+            print(f"[*] Meilleure Validation IoU atteinte ({opt.optuna_epochs} epochs) : {study.best_value:.4f}")
+            print("[*] Meilleurs Hyperparamètres trouvés :", study.best_params)
+            print("==========================================================\n")
+            
+            best_lr = study.best_params['lr']
+            best_weight_decay = study.best_params['weight_decay']
+            best_pos_weight = study.best_params['pos_weight']
+
+        except ImportError:
+            print("[!] Optuna n'est pas installé (utilisez 'pip install optuna').")
+            print("[!] L'entrainement continuera avec les paramètres par défaut.")
+            
+    # ------ FIN OPTUNA, PREPARATION ENTRAINEMENT COMPLET ------
+    
+    # Instance of the loss with potentially optimized pos_weight
+    print(f"[*] Configuration finale entraînement complet : LR={best_lr:.6f}, WD={best_weight_decay:.6f}, BCE_Weight={best_pos_weight:.2f}")
+    pos_weight = torch.tensor([best_pos_weight]).to(device)
     criterion = BCEDiceLoss(pos_weight=pos_weight).to(device)
 
-
-    # optimizer = torch.optim.Adam(model.parameters(), opt.lr)
-    #base_optimizer = torch.optim.AdamW(model.parameters(), lr=opt.lr, weight_decay=0.0025)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=opt.lr, weight_decay=0.0025)
+    # Instance of optimizer with optimized lr and weight_decay
+    optimizer = torch.optim.AdamW(model.parameters(), lr=best_lr, weight_decay=best_weight_decay)
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=15, T_mult=2)
 
     save_path = opt.save_path
