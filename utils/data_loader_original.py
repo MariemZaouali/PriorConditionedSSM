@@ -44,7 +44,7 @@ def randomRotation(image_A, image_B, label):
         random_angle = np.random.randint(-15, 15)
         image_A = image_A.rotate(random_angle, mode)
         image_B = image_B.rotate(random_angle, mode)
-        label = label.rotate(random_angle, mode)
+        label = label.rotate(random_angle, Image.NEAREST) # MUST be NEAREST for masks
     return image_A, image_B, label
 
 
@@ -115,7 +115,7 @@ class ChangeDataset(data.Dataset):
             transforms.RandomErasing(p=0.3, scale=(0.02, 0.15), value='random') # Added to simulate partial occlusion / clouds
         ])
         self.gt_transform = transforms.Compose([
-            transforms.Resize((self.trainsize, self.trainsize)),
+            transforms.Resize((self.trainsize, self.trainsize), interpolation=Image.NEAREST),
             transforms.ToTensor()])
         # get size of dataset
         self.size = len(self.images_A)
@@ -270,7 +270,7 @@ class Test_ChangeDataset(data.Dataset):
             transforms.ToTensor(),
             transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5])])
         self.gt_transform = transforms.Compose([
-            transforms.Resize((self.trainsize, self.trainsize)),
+            transforms.Resize((self.trainsize, self.trainsize), interpolation=Image.NEAREST),
             transforms.ToTensor()])
         # get size of dataset
         self.size = len(self.images_A)
