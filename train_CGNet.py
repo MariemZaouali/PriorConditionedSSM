@@ -423,6 +423,8 @@ if __name__ == '__main__':
                         help='Model type: CGNet (original) or CGNet_SSM (with RecursivePriorStateSpace)')
     parser.add_argument('--save_path', type=str,
                         default='./output/')
+    parser.add_argument('--offline_aug_num', type=int, default=1,
+                        help='Number of offline augmentations per image (0 to disable)')
     opt = parser.parse_args()
 
     # set the device for training
@@ -488,6 +490,22 @@ if __name__ == '__main__':
         opt.val_root = os.path.join(dataset_base, 'S2Looking', 'val') + '/'
         if not check_and_download_dataset('S2Looking'):
             sys.exit(1)
+
+    # ---> Intégration de l'augmentation hors-ligne <---
+    if hasattr(opt, 'offline_aug_num') and opt.offline_aug_num > 0:
+        path_A = os.path.join(opt.train_root, 'A')
+        if os.path.exists(path_A):
+            # Vérifier si les augmentations "offline" ont déjà été faites
+            existing_aug = len([f for f in os.listdir(path_A) if '_aug' in f])
+            if existing_aug == 0:
+                print(f"[*] Aucune augmentation hors-ligne détectée dans {path_A}.")
+                print(f"[*] Lancement de la génération ({opt.offline_aug_num} copies / image)...")
+                import subprocess
+                subprocess.run(['python', 'offline_augmentation.py', 
+                                '--dataset_path', opt.train_root, 
+                                '--aug_num', str(opt.offline_aug_num)])
+            else:
+                print(f"[*] Augmentations hors-ligne déjà présentes ({existing_aug} repérées). On utilise le dataset tel quel.")
 
     train_loader = data_loader.get_loader(opt.train_root, opt.batchsize, opt.trainsize, num_workers=2, shuffle=True, pin_memory=True)
     val_loader = data_loader.get_test_loader(opt.val_root, opt.batchsize, opt.trainsize, num_workers=2, shuffle=False, pin_memory=True)

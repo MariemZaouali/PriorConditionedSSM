@@ -64,17 +64,11 @@ def colorEnhance(image_A, image_B):
     return image_A, image_B
 
 
-def randomGaussian(image, mean=0.1, sigma=0.35):
-    def gaussianNoisy(im, mean=mean, sigma=sigma):
-        for _i in range(len(im)):
-            im[_i] += random.gauss(mean, sigma)
-        return im
-
-    img = np.asarray(image)
-    width, height = img.shape
-    img = gaussianNoisy(img[:].flatten(), mean, sigma)
-    img = img.reshape([width, height])
-    return Image.fromarray(np.uint8(img))
+def randomGaussian(image, mean=0.0, sigma=15.0):
+    img = np.asarray(image).astype(float)
+    noise = np.random.normal(mean, sigma, img.shape)
+    img_noisy = np.clip(img + noise, 0, 255)
+    return Image.fromarray(np.uint8(img_noisy))
 
 
 def randomPeper(img):
@@ -135,12 +129,18 @@ class ChangeDataset(data.Dataset):
             image_A, image_B, gt = randomCrop(image_A, image_B, gt)
             image_A, image_B, gt = randomRotation(image_A, image_B, gt)
             image_A,image_B = colorEnhance(image_A,image_B)
+            if random.random() > 0.5:
+                image_A = randomGaussian(image_A)
+                image_B = randomGaussian(image_B)
             gt = randomPeper(gt)
         else:
             image_A, image_B, gt = self.load_mosaic_img_and_mask(index)
             image_A, image_B, gt = cv_random_flip(image_A, image_B, gt)
             image_A, image_B, gt = randomRotation(image_A, image_B, gt)
             image_A,image_B = colorEnhance(image_A,image_B)
+            if random.random() > 0.5:
+                image_A = randomGaussian(image_A)
+                image_B = randomGaussian(image_B)
             gt = randomPeper(gt)
 
         image_A = self.img_transform(image_A)
