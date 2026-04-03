@@ -420,8 +420,8 @@ if __name__ == '__main__':
     parser.add_argument('--model_name', type=str, default='CGNet',
                         help='the test rgb images root')
     parser.add_argument('--model_type', type=str, default='CGNet',
-                        choices=['CGNet', 'CGNet_SSM'],
-                        help='Model type: CGNet (original) or CGNet_SSM (with RecursivePriorStateSpace)')
+                        choices=['CGNet', 'CGNet_SSM', 'CGNet_SSM_4dir'],
+                        help='Model type: CGNet, CGNet_SSM (2-way), or CGNet_SSM_4dir (4-way CSM)')
     parser.add_argument('--save_path', type=str,
                         default='./output/')
     parser.add_argument('--offline_aug_num', type=int, default=1,
@@ -524,9 +524,13 @@ if __name__ == '__main__':
     elif opt.model_type == 'CGNet_SSM':
         from network.CGNet_SSM import CGNet_SSM
         model = CGNet_SSM().to(device)
-        print(f"Loaded CGNet_SSM (with RecursivePriorStateSpace)")
+        print(f"Loaded CGNet_SSM (with 2-way RecursivePriorStateSpace)")
+    elif opt.model_type == 'CGNet_SSM_4dir':
+        from network.CGNet_SSM_4dir import CGNet_SSM as CGNet_SSM_4dir_model
+        model = CGNet_SSM_4dir_model().to(device)
+        print(f"Loaded CGNet_SSM_4dir (with 4-way Cross-Scan PriorStateSpace)")
     else:
-        raise ValueError(f"Unknown model_type: {opt.model_type}. Choose from: CGNet, CGNet_SSM")
+        raise ValueError(f"Unknown model_type: {opt.model_type}. Choose from: CGNet, CGNet_SSM, CGNet_SSM_4dir")
     
     # Legacy support: allow model_name parameter (maps to model_type for backward compatibility)
     if opt.model_name != 'CGNet' and opt.model_name != opt.model_type:
@@ -561,6 +565,9 @@ if __name__ == '__main__':
                 elif opt.model_type == 'CGNet_SSM':
                     from network.CGNet_SSM import CGNet_SSM
                     t_model = CGNet_SSM().to(device)
+                elif opt.model_type == 'CGNet_SSM_4dir':
+                    from network.CGNet_SSM_4dir import CGNet_SSM as CGNet_SSM_4dir_model
+                    t_model = CGNet_SSM_4dir_model().to(device)
                     
                 t_criterion = BCEDiceLoss(pos_weight=torch.tensor([trial_pw]).to(device)).to(device)
                 t_optimizer = torch.optim.AdamW(t_model.parameters(), lr=trial_lr, weight_decay=trial_wd)
