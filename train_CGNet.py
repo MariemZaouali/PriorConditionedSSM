@@ -178,8 +178,8 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
         optimizer.zero_grad()
         
         # Get predictions and gates for visualization
-        if hasattr(net, 'ssm1') and opt.model_type == 'CGNet_SSM':
-            # For CGNet_SSM, get predictions and gate masks
+        if hasattr(net, 'ssm1') and opt.model_type in ['CGNet_SSM', 'CGNet_SSM_selective']:
+            # For CGNet_SSM and selective, get predictions and gate masks
             coarse_pred, fine_pred, gates = net(A, B)
             preds = (coarse_pred, fine_pred)
         else:
@@ -420,8 +420,8 @@ if __name__ == '__main__':
     parser.add_argument('--model_name', type=str, default='CGNet',
                         help='the test rgb images root')
     parser.add_argument('--model_type', type=str, default='CGNet',
-                        choices=['CGNet', 'CGNet_SSM', 'CGNet_SSM_4dir'],
-                        help='Model type: CGNet, CGNet_SSM (2-way), or CGNet_SSM_4dir (4-way CSM)')
+                        choices=['CGNet', 'CGNet_SSM', 'CGNet_SSM_4dir', 'CGNet_SSM_selective'],
+                        help='Model type: CGNet, CGNet_SSM (2-way), CGNet_SSM_4dir (4-way CSM), or CGNet_SSM_selective (Mamba style)')
     parser.add_argument('--save_path', type=str,
                         default='./output/')
     parser.add_argument('--offline_aug_num', type=int, default=1,
@@ -529,8 +529,12 @@ if __name__ == '__main__':
         from network.CGNet_SSM_4dir import CGNet_SSM as CGNet_SSM_4dir_model
         model = CGNet_SSM_4dir_model().to(device)
         print(f"Loaded CGNet_SSM_4dir (with 4-way Cross-Scan PriorStateSpace)")
+    elif opt.model_type == 'CGNet_SSM_selective':
+        from network.CGNet_SSM_selective import CGNet_SSM as CGNet_SSM_selective_model
+        model = CGNet_SSM_selective_model().to(device)
+        print(f"Loaded CGNet_SSM_selective (with True Selective State-Space / Mamba logic)")
     else:
-        raise ValueError(f"Unknown model_type: {opt.model_type}. Choose from: CGNet, CGNet_SSM, CGNet_SSM_4dir")
+        raise ValueError(f"Unknown model_type: {opt.model_type}. Choose from: CGNet, CGNet_SSM, CGNet_SSM_4dir, CGNet_SSM_selective")
     
     # Legacy support: allow model_name parameter (maps to model_type for backward compatibility)
     if opt.model_name != 'CGNet' and opt.model_name != opt.model_type:
@@ -568,6 +572,9 @@ if __name__ == '__main__':
                 elif opt.model_type == 'CGNet_SSM_4dir':
                     from network.CGNet_SSM_4dir import CGNet_SSM as CGNet_SSM_4dir_model
                     t_model = CGNet_SSM_4dir_model().to(device)
+                elif opt.model_type == 'CGNet_SSM_selective':
+                    from network.CGNet_SSM_selective import CGNet_SSM as CGNet_SSM_selective_model
+                    t_model = CGNet_SSM_selective_model().to(device)
                     
                 t_criterion = BCEDiceLoss(pos_weight=torch.tensor([trial_pw]).to(device)).to(device)
                 t_optimizer = torch.optim.AdamW(t_model.parameters(), lr=trial_lr, weight_decay=trial_wd)
@@ -582,7 +589,7 @@ if __name__ == '__main__':
                     for A, B, mask, _ in train_loader:
                         A, B, Y = A.to(device), B.to(device), mask.to(device).float()
                         t_optimizer.zero_grad()
-                        if hasattr(t_model, 'ssm1') and opt.model_type == 'CGNet_SSM':
+                        if hasattr(t_model, 'ssm1') and opt.model_type in ['CGNet_SSM', 'CGNet_SSM_selective']:
                             preds = t_model(A, B)
                             preds = (preds[0], preds[1]) # Ignore les gates
                         else:

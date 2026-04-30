@@ -1,0 +1,24 @@
+# Compiled Python
+__pycache__/
+*.pyc
+
+# LaTeX and presentation files
+*.tex
+*.pdf
+*.ppt
+*.pptx
+*.aux
+*.log
+*.out
+*.nav
+*.snm
+*.toc
+*.fls
+*.fdb_latexmk
+
+# Output directories
+/output/
+/runs/
+/results/
+/figures/
+/data/
