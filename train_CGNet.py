@@ -647,7 +647,7 @@ if __name__ == '__main__':
 
     # Instance of optimizer with optimized lr and weight_decay
     optimizer = torch.optim.AdamW(model.parameters(), lr=best_lr, weight_decay=best_weight_decay)
-    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=15, T_mult=2)
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=opt.epoch, eta_min=1e-6)
 
     save_path = opt.save_path
     if not os.path.exists(save_path):
