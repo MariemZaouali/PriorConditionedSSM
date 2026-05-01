@@ -41,7 +41,7 @@ class PriorConditionedSelectiveStateSpace(nn.Module):
         self.A = nn.Parameter(torch.randn(hidden_dim))
         
         # Résiduel
-        self.gamma = nn.Parameter(torch.tensor(0.1))
+        self.gamma = nn.Parameter(torch.tensor(0.0))
 
     def forward(self, x, prior):
         Bsz, C, H, W = x.shape
@@ -86,8 +86,21 @@ class PriorConditionedSelectiveStateSpace(nn.Module):
                 prev = h
             return torch.stack(steps, dim=-1 if dim == 0 else 2)
 
-        # Double scan horizontal et vertical
-        out = self.output_proj(scan(x_proj, A_bar, B_bar, 0) + scan(x_proj, A_bar, B_bar, 1))
+        # 4-Directional Cross-Scan (horizontal et vertical, forward and backward)
+        scan_h_fwd = scan(x_proj, A_bar, B_bar, 0)
+        scan_v_fwd = scan(x_proj, A_bar, B_bar, 1)
+
+        scan_h_bwd = torch.flip(
+            scan(torch.flip(x_proj, [3]), torch.flip(A_bar, [3]), torch.flip(B_bar, [3]), 0), 
+            [3]
+        )
+        
+        scan_v_bwd = torch.flip(
+            scan(torch.flip(x_proj, [2]), torch.flip(A_bar, [2]), torch.flip(B_bar, [2]), 1), 
+            [2]
+        )
+
+        out = self.output_proj(scan_h_fwd + scan_h_bwd + scan_v_fwd + scan_v_bwd)
         
         # Retourne l'output. On retourne prior_up comme 2eme argument pour la compatibilité avec train_CGNet.py (gate visualization)
         return x + self.gamma * out, prior_up
