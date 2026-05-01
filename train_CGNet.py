@@ -430,6 +430,8 @@ if __name__ == '__main__':
                         help='Number of Optuna trials to find best hyperparameters before full training (0 to disable)')
     parser.add_argument('--optuna_epochs', type=int, default=3,
                         help='Number of epochs per Optuna trial (keep it small)')
+    parser.add_argument('--load_path', type=str, default='',
+                        help='Path to pre-trained weights (.pth)')
     opt = parser.parse_args()
 
     # set the device for training
@@ -533,6 +535,21 @@ if __name__ == '__main__':
         from network.CGNet_SSM_selective import CGNet_SSM as CGNet_SSM_selective_model
         model = CGNet_SSM_selective_model().to(device)
         print(f"Loaded CGNet_SSM_selective (with True Selective State-Space / Mamba logic)")
+        
+        # --- CHARGEMENT DES POIDS SI SPECIFIÉ ---
+        if opt.load_path:
+            if os.path.exists(opt.load_path):
+                print(f"[*] Loading weights from {opt.load_path}...")
+                state_dict = torch.load(opt.load_path, map_location=device)
+                # Gérer le cas où c'est un checkpoint complet ou juste les weights
+                if 'model_state_dict' in state_dict:
+                    model.load_state_dict(state_dict['model_state_dict'])
+                else:
+                    model.load_state_dict(state_dict)
+                print("✓ Weights loaded successfully!")
+            else:
+                print(f"⚠ Warning: load_path {opt.load_path} not found. Starting from scratch.")
+        # ----------------------------------------
     else:
         raise ValueError(f"Unknown model_type: {opt.model_type}. Choose from: CGNet, CGNet_SSM, CGNet_SSM_4dir, CGNet_SSM_selective")
     
