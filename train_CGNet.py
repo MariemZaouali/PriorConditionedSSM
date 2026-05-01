@@ -535,23 +535,26 @@ if __name__ == '__main__':
         from network.CGNet_SSM_selective import CGNet_SSM as CGNet_SSM_selective_model
         model = CGNet_SSM_selective_model().to(device)
         print(f"Loaded CGNet_SSM_selective (with True Selective State-Space / Mamba logic)")
-        
-        # --- CHARGEMENT DES POIDS SI SPECIFIÉ ---
-        if opt.load_path:
-            if os.path.exists(opt.load_path):
-                print(f"[*] Loading weights from {opt.load_path}...")
-                state_dict = torch.load(opt.load_path, map_location=device)
-                # Gérer le cas où c'est un checkpoint complet ou juste les weights
-                if 'model_state_dict' in state_dict:
-                    model.load_state_dict(state_dict['model_state_dict'])
-                else:
-                    model.load_state_dict(state_dict)
-                print("✓ Weights loaded successfully!")
-            else:
-                print(f"⚠ Warning: load_path {opt.load_path} not found. Starting from scratch.")
-        # ----------------------------------------
     else:
         raise ValueError(f"Unknown model_type: {opt.model_type}. Choose from: CGNet, CGNet_SSM, CGNet_SSM_4dir, CGNet_SSM_selective")
+
+    # --- CHARGEMENT DES POIDS OU CHECKPOINT (GLOBAL) ---
+    start_epoch = 1
+    if opt.load_path:
+        if os.path.exists(opt.load_path):
+            print(f"[*] Loading from {opt.load_path}...")
+            checkpoint = torch.load(opt.load_path, map_location=device)
+            
+            if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+                model.load_state_dict(checkpoint['model_state_dict'])
+                start_epoch = checkpoint.get('epoch', 0) + 1
+                print(f"✓ Resuming from Epoch {start_epoch}")
+            else:
+                model.load_state_dict(checkpoint)
+                print("✓ Weights loaded successfully (starting from Epoch 1)")
+        else:
+            print(f"⚠ Warning: load_path {opt.load_path} not found. Starting from scratch.")
+    # --------------------------------------------------
     
     # Legacy support: allow model_name parameter (maps to model_type for backward compatibility)
     if opt.model_name != 'CGNet' and opt.model_name != opt.model_type:
@@ -678,7 +681,7 @@ if __name__ == '__main__':
     # print('现在的数据是：',args.data_name)
 
 
-    for epoch in range(1, opt.epoch):
+    for epoch in range(start_epoch, opt.epoch + 1):
         for param_group in optimizer.param_groups:
             print(param_group['lr'])
         # cur_lr = adjust_lr(optimizer, opt.lr, epoch, opt.decay_rate, opt.decay_epoch)
