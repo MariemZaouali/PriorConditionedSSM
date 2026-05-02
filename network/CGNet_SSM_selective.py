@@ -70,33 +70,28 @@ class PriorConditionedSelectiveStateSpace(nn.Module):
         # B_bar = Delta * B_k (approximation standard utilisée dans Mamba pour ZOH)
         B_bar = delta * B_k
 
-        # 3. Récursion (Selective Scan avec A_bar et B_bar variants dans le temps)
-        def scan(feat, A_bar_seq, B_bar_seq, dim):
-            steps = []
-            prev = None
-            size = feat.shape[3] if dim == 0 else feat.shape[2]
-            for i in range(size):
-                x_i = feat[:, :, :, i] if dim == 0 else feat[:, :, i, :]
-                A_i = A_bar_seq[:, :, :, i] if dim == 0 else A_bar_seq[:, :, i, :]
-                B_i = B_bar_seq[:, :, :, i] if dim == 0 else B_bar_seq[:, :, i, :]
-                
-                prev_val = prev.detach() if self.use_detach and prev is not None else prev
-                h = (B_i * x_i) if prev is None else (A_i * prev_val + B_i * x_i)
-                steps.append(h)
-                prev = h
-            return torch.stack(steps, dim=-1 if dim == 0 else 2)
+        # 3. Parallel Prefix Scan — VECTORISÉ GPU (remplace la boucle Python séquentielle)
+        # Principe : h_i = A_i * h_{i-1} + B_i * x_i  avec h_0 = 0
+        # Forme fermée : h = cumprod(A) * cumsum(B*x / cumprod(A))
+        # → Zéro boucle Python, entièrement parallélisé sur CUDA (O(n) GPU vs O(n) CPU séquentiel)
+        def parallel_scan(feat, A_seq, B_seq, seq_dim):
+            b = B_seq * feat                                          # b_i = B_i * x_i
+            P = torch.cumprod(A_seq, dim=seq_dim)                    # P_i = A_1 * ... * A_i
+            P_safe = P.clamp(min=1e-8)                               # éviter division par zéro
+            h = P * torch.cumsum(b / P_safe, dim=seq_dim)            # h_i = P_i * Σ(b_j / P_j)
+            return h
 
-        # 4-Directional Cross-Scan (horizontal et vertical, forward and backward)
-        scan_h_fwd = scan(x_proj, A_bar, B_bar, 0)
-        scan_v_fwd = scan(x_proj, A_bar, B_bar, 1)
+        # 4-Directional Cross-Scan (horizontal et vertical, forward et backward)
+        # dim=3 → scan horizontal (W), dim=2 → scan vertical (H)
+        scan_h_fwd = parallel_scan(x_proj, A_bar, B_bar, seq_dim=3)
+        scan_v_fwd = parallel_scan(x_proj, A_bar, B_bar, seq_dim=2)
 
         scan_h_bwd = torch.flip(
-            scan(torch.flip(x_proj, [3]), torch.flip(A_bar, [3]), torch.flip(B_bar, [3]), 0), 
+            parallel_scan(torch.flip(x_proj, [3]), torch.flip(A_bar, [3]), torch.flip(B_bar, [3]), seq_dim=3),
             [3]
         )
-        
         scan_v_bwd = torch.flip(
-            scan(torch.flip(x_proj, [2]), torch.flip(A_bar, [2]), torch.flip(B_bar, [2]), 1), 
+            parallel_scan(torch.flip(x_proj, [2]), torch.flip(A_bar, [2]), torch.flip(B_bar, [2]), seq_dim=2),
             [2]
         )
 
