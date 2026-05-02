@@ -432,6 +432,8 @@ if __name__ == '__main__':
                         help='Number of epochs per Optuna trial (keep it small)')
     parser.add_argument('--load_path', type=str, default='',
                         help='Path to pre-trained weights (.pth)')
+    parser.add_argument('--start_epoch', type=int, default=1,
+                        help='Epoch to start from (useful when loading weights without checkpoint state)')
     opt = parser.parse_args()
 
     # set the device for training
@@ -539,7 +541,7 @@ if __name__ == '__main__':
         raise ValueError(f"Unknown model_type: {opt.model_type}. Choose from: CGNet, CGNet_SSM, CGNet_SSM_4dir, CGNet_SSM_selective")
 
     # --- CHARGEMENT DES POIDS OU CHECKPOINT (GLOBAL) ---
-    start_epoch = 1
+    start_epoch = opt.start_epoch
     if opt.load_path:
         if os.path.exists(opt.load_path):
             print(f"[*] Loading from {opt.load_path}...")
