@@ -81,21 +81,12 @@ class PriorConditionedSelectiveStateSpace(nn.Module):
             h = P * torch.cumsum(b / P_safe, dim=seq_dim)            # h_i = P_i * Σ(b_j / P_j)
             return h
 
-        # 4-Directional Cross-Scan (horizontal et vertical, forward et backward)
+        # 2-Directional Cross-Scan (horizontal et vertical, forward uniquement)
         # dim=3 → scan horizontal (W), dim=2 → scan vertical (H)
         scan_h_fwd = parallel_scan(x_proj, A_bar, B_bar, seq_dim=3)
         scan_v_fwd = parallel_scan(x_proj, A_bar, B_bar, seq_dim=2)
 
-        scan_h_bwd = torch.flip(
-            parallel_scan(torch.flip(x_proj, [3]), torch.flip(A_bar, [3]), torch.flip(B_bar, [3]), seq_dim=3),
-            [3]
-        )
-        scan_v_bwd = torch.flip(
-            parallel_scan(torch.flip(x_proj, [2]), torch.flip(A_bar, [2]), torch.flip(B_bar, [2]), seq_dim=2),
-            [2]
-        )
-
-        out = self.output_proj(scan_h_fwd + scan_h_bwd + scan_v_fwd + scan_v_bwd)
+        out = self.output_proj(scan_h_fwd + scan_v_fwd)
         
         # Retourne l'output. On retourne prior_up comme 2eme argument pour la compatibilité avec train_CGNet.py (gate visualization)
         return x + self.gamma * out, prior_up
