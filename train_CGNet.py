@@ -178,7 +178,7 @@ def train(train_loader, val_loader, Eva_train, Eva_val, data_name, save_path, ne
         optimizer.zero_grad()
         
         # Get predictions and gates for visualization
-        if hasattr(net, 'ssm1') and opt.model_type in ['CGNet_SSM', 'CGNet_SSM_selective']:
+        if hasattr(net, 'ssm1') and opt.model_type in ['CGNet_SSM', 'CGNet_SSM_selective', 'CGNet_SSM_selective_4D']:
             # For CGNet_SSM and selective, get predictions and gate masks
             coarse_pred, fine_pred, gates = net(A, B)
             preds = (coarse_pred, fine_pred)
@@ -420,8 +420,8 @@ if __name__ == '__main__':
     parser.add_argument('--model_name', type=str, default='CGNet',
                         help='the test rgb images root')
     parser.add_argument('--model_type', type=str, default='CGNet',
-                        choices=['CGNet', 'CGNet_SSM', 'CGNet_SSM_4dir', 'CGNet_SSM_selective'],
-                        help='Model type: CGNet, CGNet_SSM (2-way), CGNet_SSM_4dir (4-way CSM), or CGNet_SSM_selective (Mamba style)')
+                        choices=['CGNet', 'CGNet_SSM', 'CGNet_SSM_4dir', 'CGNet_SSM_selective', 'CGNet_SSM_selective_4D'],
+                        help='Model type: CGNet, CGNet_SSM (2-way), CGNet_SSM_4dir (4-way CSM), CGNet_SSM_selective (2D-Mamba), or CGNet_SSM_selective_4D (4D-Mamba)')
     parser.add_argument('--save_path', type=str,
                         default='./output/')
     parser.add_argument('--offline_aug_num', type=int, default=1,
@@ -536,9 +536,13 @@ if __name__ == '__main__':
     elif opt.model_type == 'CGNet_SSM_selective':
         from network.CGNet_SSM_selective import CGNet_SSM as CGNet_SSM_selective_model
         model = CGNet_SSM_selective_model().to(device)
-        print(f"Loaded CGNet_SSM_selective (with True Selective State-Space / Mamba logic)")
+        print(f"Loaded CGNet_SSM_selective (with 2D Selective State-Space / Mamba logic)")
+    elif opt.model_type == 'CGNet_SSM_selective_4D':
+        from network.CGNet_SSM_selective_4D import CGNet_SSM as CGNet_SSM_selective_4D_model
+        model = CGNet_SSM_selective_4D_model().to(device)
+        print(f"Loaded CGNet_SSM_selective_4D (with 4D Vectorized Selective State-Space)")
     else:
-        raise ValueError(f"Unknown model_type: {opt.model_type}. Choose from: CGNet, CGNet_SSM, CGNet_SSM_4dir, CGNet_SSM_selective")
+        raise ValueError(f"Unknown model_type: {opt.model_type}. Choose from: CGNet, CGNet_SSM, CGNet_SSM_4dir, CGNet_SSM_selective, CGNet_SSM_selective_4D")
 
     # --- CHARGEMENT DES POIDS OU CHECKPOINT (GLOBAL) ---
     start_epoch = opt.start_epoch
@@ -597,6 +601,9 @@ if __name__ == '__main__':
                 elif opt.model_type == 'CGNet_SSM_selective':
                     from network.CGNet_SSM_selective import CGNet_SSM as CGNet_SSM_selective_model
                     t_model = CGNet_SSM_selective_model().to(device)
+                elif opt.model_type == 'CGNet_SSM_selective_4D':
+                    from network.CGNet_SSM_selective_4D import CGNet_SSM as CGNet_SSM_selective_4D_model
+                    t_model = CGNet_SSM_selective_4D_model().to(device)
                     
                 t_criterion = BCEDiceLoss(pos_weight=torch.tensor([trial_pw]).to(device)).to(device)
                 t_optimizer = torch.optim.AdamW(t_model.parameters(), lr=trial_lr, weight_decay=trial_wd)
@@ -611,7 +618,7 @@ if __name__ == '__main__':
                     for A, B, mask, _ in train_loader:
                         A, B, Y = A.to(device), B.to(device), mask.to(device).float()
                         t_optimizer.zero_grad()
-                        if hasattr(t_model, 'ssm1') and opt.model_type in ['CGNet_SSM', 'CGNet_SSM_selective']:
+                        if hasattr(t_model, 'ssm1') and opt.model_type in ['CGNet_SSM', 'CGNet_SSM_selective', 'CGNet_SSM_selective_4D']:
                             preds = t_model(A, B)
                             preds = (preds[0], preds[1]) # Ignore les gates
                         else:
