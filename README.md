@@ -1,6 +1,6 @@
 # Prior-Conditioned State Space Models for Change Detection (SPC-SSM)
 
-This repository contains the official implementation of **SPC-SSM** (Prior-Conditioned State Space Models), integrated with a high-performance **CGNet** baseline for Remote Sensing Change Detection (CD). 
+This repository contains the official implementation of **SPC-SSM** (Selective Prior-Conditioned State Space Models), integrated with a high-performance **CGNet** baseline for Remote Sensing Change Detection (CD). 
 
 By incorporating state-space model structures (selective 2D-Mamba and vectorized 4D-Mamba) guided by change priors, SPC-SSM achieves superior accuracy and spatial context integration for change detection tasks.
 
