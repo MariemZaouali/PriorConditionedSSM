@@ -9,10 +9,8 @@ By incorporating state-space model structures (selective 2D-Mamba and vectorized
 ## 🌟 Features
 - **Multiple Model Architectures**:
   - `CGNet` (Original Change Guiding Network)
-  - `CGNet_SSM` (2-way Recursive Prior State Space Model)
-  - `CGNet_SSM_4dir` (4-way Cross-Scan Prior State Space Model)
   - `CGNet_SSM_selective` (2D Selective State-Space / Mamba logic)
-  - `CGNet_SSM_selective_4D` (4D Vectorized Selective State-Space)
+  - `CGNet_SSM_selective_4D` (4D  Selective State-Space)
 - **Offline Data Augmentation**: Easily generate augmented training pairs to improve robustness.
 - **Optuna Hyperparameter Search**: Built-in support for automated tuning of learning rates, weight decay, and loss weights.
 - **Visualizations**: Automatic saving of predictions and SSM gate activations during training and evaluation.
