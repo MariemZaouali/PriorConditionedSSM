@@ -20,10 +20,19 @@ class BasicConv2d(nn.Module):
 # 2. MODULE SPC-SSM 4-DIR VECTORISÉ (Sélectif & GPU-Parallel)
 # ============================================================
 class PriorConditionedSelectiveStateSpace(nn.Module):
-    def __init__(self, in_channels, hidden_dim=128, use_detach=True):
+    def __init__(self, in_channels, hidden_dim=128, use_detach=True, fusion_mode='add'):
+        """
+        Args:
+            in_channels  : number of input feature channels
+            hidden_dim   : SSM hidden state dimension
+            use_detach   : kept for API compatibility
+            fusion_mode  : 'add'       -> somme simple des 4 directions (comportement original)
+                           'learnable' -> fusion pondérée apprise par canal sur les 4 directions
+        """
         super().__init__()
         self.use_detach = use_detach
         self.hidden_dim = hidden_dim
+        self.fusion_mode = fusion_mode
         
         # Projections
         self.input_proj = nn.Conv2d(in_channels, hidden_dim, 1)
@@ -33,13 +42,22 @@ class PriorConditionedSelectiveStateSpace(nn.Module):
         self.W_delta = nn.Conv2d(hidden_dim, hidden_dim, 1)
         self.W_B = nn.Conv2d(hidden_dim, hidden_dim, 1)
         
-        # Hyperparamètres de conditionnement
+        # Hyperparametères de conditionnement
         self.lambda_delta = nn.Parameter(torch.tensor(0.1))
         self.alpha = nn.Parameter(torch.tensor(0.1))
         self.A = nn.Parameter(torch.randn(hidden_dim))
         
         # Résiduel
         self.gamma = nn.Parameter(torch.tensor(0.0))
+
+        # ── Learnable weighted fusion pour 4 directions ──
+        # 4 vecteurs de poids par canal initialisés à 0.25 (symétrique)
+        # et normalisés via softmax → somme = 1 sur les 4 directions
+        if self.fusion_mode == 'learnable':
+            self.w_hf = nn.Parameter(torch.full((hidden_dim, 1, 1), 0.25))  # horizontal forward
+            self.w_hb = nn.Parameter(torch.full((hidden_dim, 1, 1), 0.25))  # horizontal backward
+            self.w_vf = nn.Parameter(torch.full((hidden_dim, 1, 1), 0.25))  # vertical forward
+            self.w_vb = nn.Parameter(torch.full((hidden_dim, 1, 1), 0.25))  # vertical backward
 
     def forward(self, x, prior):
         Bsz, C, H, W = x.shape
@@ -76,8 +94,19 @@ class PriorConditionedSelectiveStateSpace(nn.Module):
         v_fwd = parallel_scan(x_proj, A_bar, B_bar, seq_dim=2)
         v_bwd = parallel_scan(x_proj.flip(dims=[2]), A_bar.flip(dims=[2]), B_bar.flip(dims=[2]), seq_dim=2).flip(dims=[2])
 
-        # Fusion des 4 directions (Somme simple pour cohérence)
-        out = self.output_proj(h_fwd + h_bwd + v_fwd + v_bwd)
+        # ── Fusion des 4 directions ────────────────────────────────────────────
+        # Mode 'add'       : somme simple sur les 4 directions (comportement original)
+        # Mode 'learnable' : pondération apprise par canal sur les 4 directions
+        if self.fusion_mode == 'learnable':
+            weights = torch.softmax(
+                torch.stack([self.w_hf, self.w_hb, self.w_vf, self.w_vb], dim=0), dim=0
+            )  # shape: (4, hidden_dim, 1, 1)
+            fused = (weights[0] * h_fwd + weights[1] * h_bwd +
+                     weights[2] * v_fwd + weights[3] * v_bwd)
+        else:  # 'add' — comportement original
+            fused = h_fwd + h_bwd + v_fwd + v_bwd
+
+        out = self.output_proj(fused)
         
         return x + self.gamma * out, prior_up
 
@@ -85,7 +114,12 @@ class PriorConditionedSelectiveStateSpace(nn.Module):
 # 3. ARCHITECTURE CGNet_SSM 4D SELECTIVE
 # ============================================================
 class CGNet_SSM(nn.Module):
-    def __init__(self):
+    def __init__(self, fusion_mode='add'):
+        """
+        Args:
+            fusion_mode : 'add'       -> somme simple des 4 directions (comportement original)
+                          'learnable' -> pondération apprise par canal sur les 4 directions
+        """
         super().__init__()
         vgg = models.vgg16_bn(weights=models.VGG16_BN_Weights.DEFAULT)
         self.inc, self.d1, self.d2, self.d3, self.d4 = vgg.features[:5], vgg.features[5:12], vgg.features[12:22], vgg.features[22:32], vgg.features[32:42]
@@ -93,9 +127,9 @@ class CGNet_SSM(nn.Module):
         self.red1, self.red2, self.red3, self.red4 = BasicConv2d(256, 128, 3, 1, 1), BasicConv2d(512, 256, 3, 1, 1), BasicConv2d(1024, 512, 3, 1, 1), BasicConv2d(1024, 512, 3, 1, 1)
         self.decoder_coarse = nn.Sequential(BasicConv2d(512, 64, 3, 1, 1), nn.Conv2d(64, 1, 3, 1, 1))
         
-        self.ssm3 = PriorConditionedSelectiveStateSpace(512, 256)
-        self.ssm2 = PriorConditionedSelectiveStateSpace(256, 128)
-        self.ssm1 = PriorConditionedSelectiveStateSpace(128, 64)
+        self.ssm3 = PriorConditionedSelectiveStateSpace(512, 256, fusion_mode=fusion_mode)
+        self.ssm2 = PriorConditionedSelectiveStateSpace(256, 128, fusion_mode=fusion_mode)
+        self.ssm1 = PriorConditionedSelectiveStateSpace(128, 64,  fusion_mode=fusion_mode)
         
         self.up = nn.UpsamplingBilinear2d(scale_factor=2)
         self.dec_mod4, self.dec_mod3, self.dec_mod2 = BasicConv2d(1024, 512, 3, 1, 1), BasicConv2d(768, 256, 3, 1, 1), BasicConv2d(384, 128, 3, 1, 1)

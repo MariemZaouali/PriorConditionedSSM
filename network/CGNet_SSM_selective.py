@@ -20,10 +20,19 @@ class BasicConv2d(nn.Module):
 # 2. MODULE RPSS SELECTIF (Conditioned Selective SSM type Mamba)
 # ============================================================
 class PriorConditionedSelectiveStateSpace(nn.Module):
-    def __init__(self, in_channels, hidden_dim=128, use_detach=True):
+    def __init__(self, in_channels, hidden_dim=128, use_detach=True, fusion_mode='add'):
+        """
+        Args:
+            in_channels  : number of input feature channels
+            hidden_dim   : SSM hidden state dimension
+            use_detach   : whether to detach the prior (unused but kept for API compat)
+            fusion_mode  : 'add'       -> simple element-wise addition of h and v scans (Eq. 12)
+                           'learnable' -> channel-wise learnable weighted fusion via softmax
+        """
         super().__init__()
         self.use_detach = use_detach
         self.hidden_dim = hidden_dim
+        self.fusion_mode = fusion_mode
         
         # Projections
         self.input_proj = nn.Conv2d(in_channels, hidden_dim, 1)
@@ -42,6 +51,14 @@ class PriorConditionedSelectiveStateSpace(nn.Module):
         
         # Résiduel
         self.gamma = nn.Parameter(torch.tensor(0.0))
+
+        # ── Learnable weighted fusion (activé seulement si fusion_mode='learnable') ──
+        # w_h et w_v sont des vecteurs de poids par canal de dimension hidden_dim.
+        # Initialisés à 0.5 (symétrique) puis normalisés via softmax pour garantir
+        # que les poids somment à 1 et capturent l'anisotropie directionnelle.
+        if self.fusion_mode == 'learnable':
+            self.w_h = nn.Parameter(torch.full((hidden_dim, 1, 1), 0.5))  # poids horizontal
+            self.w_v = nn.Parameter(torch.full((hidden_dim, 1, 1), 0.5))  # poids vertical
 
     def forward(self, x, prior):
         Bsz, C, H, W = x.shape
@@ -86,7 +103,21 @@ class PriorConditionedSelectiveStateSpace(nn.Module):
         scan_h_fwd = parallel_scan(x_proj, A_bar, B_bar, seq_dim=3)
         scan_v_fwd = parallel_scan(x_proj, A_bar, B_bar, seq_dim=2)
 
-        out = self.output_proj(scan_h_fwd + scan_v_fwd)
+        # ── Fusion des deux directions ──────────────────────────────────────────────
+        # Mode 'add'       : somme element-wise simple (Eq. 12 du papier)
+        # Mode 'learnable' : fusion pondérée apprise par canal
+        #   h_fusion = softmax([w_h, w_v])[0] * scan_h + softmax([w_h, w_v])[1] * scan_v
+        #   Les poids sont normalisés par softmax → garantit la somme = 1
+        if self.fusion_mode == 'learnable':
+            # Stack + softmax sur la dim 0 pour normaliser les 2 poids par canal
+            weights = torch.softmax(
+                torch.stack([self.w_h, self.w_v], dim=0), dim=0
+            )  # shape: (2, hidden_dim, 1, 1)
+            fused = weights[0] * scan_h_fwd + weights[1] * scan_v_fwd
+        else:  # 'add' — comportement original
+            fused = scan_h_fwd + scan_v_fwd
+
+        out = self.output_proj(fused)
         
         # Retourne l'output. On retourne prior_up comme 2eme argument pour la compatibilité avec train_CGNet.py (gate visualization)
         return x + self.gamma * out, prior_up
@@ -95,7 +126,12 @@ class PriorConditionedSelectiveStateSpace(nn.Module):
 # 3. ARCHITECTURE CGNet_SSM_selective
 # ============================================================
 class CGNet_SSM(nn.Module):
-    def __init__(self):
+    def __init__(self, fusion_mode='add'):
+        """
+        Args:
+            fusion_mode : 'add'       -> somme simple H+V (Eq. 12, comportement original)
+                          'learnable' -> fusion pondérée apprise par canal (ablation reviewer)
+        """
         super().__init__()
         vgg = models.vgg16_bn(weights=models.VGG16_BN_Weights.DEFAULT)
         self.inc, self.d1, self.d2, self.d3, self.d4 = vgg.features[:5], vgg.features[5:12], vgg.features[12:22], vgg.features[22:32], vgg.features[32:42]
@@ -103,10 +139,10 @@ class CGNet_SSM(nn.Module):
         self.red1, self.red2, self.red3, self.red4 = BasicConv2d(256, 128, 3, 1, 1), BasicConv2d(512, 256, 3, 1, 1), BasicConv2d(1024, 512, 3, 1, 1), BasicConv2d(1024, 512, 3, 1, 1)
         self.decoder_coarse = nn.Sequential(BasicConv2d(512, 64, 3, 1, 1), nn.Conv2d(64, 1, 3, 1, 1))
         
-        # On utilise le module Selectif Conditionné
-        self.ssm3 = PriorConditionedSelectiveStateSpace(512, 256)
-        self.ssm2 = PriorConditionedSelectiveStateSpace(256, 128)
-        self.ssm1 = PriorConditionedSelectiveStateSpace(128, 64)
+        # On utilise le module Selectif Conditionné avec le mode de fusion choisi
+        self.ssm3 = PriorConditionedSelectiveStateSpace(512, 256, fusion_mode=fusion_mode)
+        self.ssm2 = PriorConditionedSelectiveStateSpace(256, 128, fusion_mode=fusion_mode)
+        self.ssm1 = PriorConditionedSelectiveStateSpace(128, 64,  fusion_mode=fusion_mode)
         
         self.up = nn.UpsamplingBilinear2d(scale_factor=2)
         self.dec_mod4, self.dec_mod3, self.dec_mod2 = BasicConv2d(1024, 512, 3, 1, 1), BasicConv2d(768, 256, 3, 1, 1), BasicConv2d(384, 128, 3, 1, 1)

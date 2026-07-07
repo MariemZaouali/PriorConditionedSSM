@@ -434,6 +434,11 @@ if __name__ == '__main__':
                         help='Path to pre-trained weights (.pth)')
     parser.add_argument('--start_epoch', type=int, default=1,
                         help='Epoch to start from (useful when loading weights without checkpoint state)')
+    parser.add_argument('--fusion_mode', type=str, default='add',
+                        choices=['add', 'learnable'],
+                        help="Fusion mode for selective SSM models: "
+                             "'add' = simple element-wise sum (Eq.12, default), "
+                             "'learnable' = channel-wise learnable weighted fusion (ablation)")
     opt = parser.parse_args()
 
     # set the device for training
@@ -535,12 +540,12 @@ if __name__ == '__main__':
         print(f"Loaded CGNet_SSM_4dir (with 4-way Cross-Scan PriorStateSpace)")
     elif opt.model_type == 'CGNet_SSM_selective':
         from network.CGNet_SSM_selective import CGNet_SSM as CGNet_SSM_selective_model
-        model = CGNet_SSM_selective_model().to(device)
-        print(f"Loaded CGNet_SSM_selective (with 2D Selective State-Space / Mamba logic)")
+        model = CGNet_SSM_selective_model(fusion_mode=getattr(opt, 'fusion_mode', 'add')).to(device)
+        print(f"Loaded CGNet_SSM_selective (2D Selective State-Space, fusion_mode='{opt.fusion_mode}')")
     elif opt.model_type == 'CGNet_SSM_selective_4D':
         from network.CGNet_SSM_selective_4D import CGNet_SSM as CGNet_SSM_selective_4D_model
-        model = CGNet_SSM_selective_4D_model().to(device)
-        print(f"Loaded CGNet_SSM_selective_4D (with 4D Vectorized Selective State-Space)")
+        model = CGNet_SSM_selective_4D_model(fusion_mode=getattr(opt, 'fusion_mode', 'add')).to(device)
+        print(f"Loaded CGNet_SSM_selective_4D (4D Vectorized Selective State-Space, fusion_mode='{opt.fusion_mode}')")
     else:
         raise ValueError(f"Unknown model_type: {opt.model_type}. Choose from: CGNet, CGNet_SSM, CGNet_SSM_4dir, CGNet_SSM_selective, CGNet_SSM_selective_4D")
 
